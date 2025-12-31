@@ -16,3 +16,5 @@ IMDbPY>=2022.7.9
 # HTTP & parsing
 httpx>=0.25
 beautifulsoup4>=4.12
+
+aiohttp>=3.9.0
