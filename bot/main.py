@@ -11,8 +11,8 @@ from pyrogram import types
 from aiohttp import web
 
 from bot.config import settings, LOG_STR
-from bot.database.client import db
-from bot.database.ia_filterdb import Media
+from database.users_chats_db import db
+from database.ia_filterdb import Media
 from bot.utils.cache import RuntimeCache
 from plugins import web_server
 
