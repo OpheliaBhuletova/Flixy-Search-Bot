@@ -1,0 +1,18 @@
+# Core Telegram framework
+pyrogram>=2.0.106
+tgcrypto>=1.2.5
+
+# Database (async)
+motor>=3.4.0
+umongo>=3.1.0
+
+# Configuration
+pydantic-settings>=2.1
+python-dotenv>=1.0
+
+# IMDb integration
+IMDbPY>=2022.7.9
+
+# HTTP & parsing
+httpx>=0.25
+beautifulsoup4>=4.12
