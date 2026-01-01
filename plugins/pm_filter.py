@@ -29,7 +29,7 @@ from database.ia_filterdb import (
     get_file_details,
     get_search_results,
 )
-from bot.database.filters_mdb import del_all, find_filter, get_filters
+from database.filters_mdb import del_all, find_filter, get_filters
 from bot.utils.cache import RuntimeCache
 from bot.utils.helpers import (
     get_size,

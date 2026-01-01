@@ -7,7 +7,7 @@ from pyrogram.errors import (
     FloodWait,
 )
 from pyrogram.types import Message
-from bot.database.client import db
+from database.client import db
 
 logger = logging.getLogger(__name__)
 

@@ -4,7 +4,7 @@ from pyrogram import Client, filters, enums
 from pyrogram.types import InlineKeyboardButton, InlineKeyboardMarkup, Message
 
 from bot.config import settings
-from bot.database.filters_mdb import (
+from database.filters_mdb import (
     add_filter,
     get_filters,
     delete_filter,
