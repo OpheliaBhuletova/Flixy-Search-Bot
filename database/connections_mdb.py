@@ -3,14 +3,14 @@ import logging
 
 from motor.motor_asyncio import AsyncIOMotorClient
 
-from info import DATABASE_URI, DATABASE_NAME
+from bot.config import settings
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.ERROR)
 
 # ─── Mongo Client ───────────────────────────────────────────────────────
-mongo_client = AsyncIOMotorClient(DATABASE_URI)
-database = mongo_client[DATABASE_NAME]
+mongo_client = AsyncIOMotorClient(settings.DATABASE_URL)
+database = mongo_client[settings.DATABASE_NAME]
 collection = database["CONNECTION"]
 
 

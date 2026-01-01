@@ -11,19 +11,14 @@ from marshmallow.exceptions import ValidationError
 from umongo import Instance, Document, fields
 from motor.motor_asyncio import AsyncIOMotorClient
 
-from info import (
-    DATABASE_URI,
-    DATABASE_NAME,
-    COLLECTION_NAME,
-    USE_CAPTION_FILTER,
-)
+from bot.config import settings
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.WARNING)
 
 # ─── Mongo Setup ─────────────────────────────────────────────────────────
-client = AsyncIOMotorClient(DATABASE_URI)
-db = client[DATABASE_NAME]
+client = AsyncIOMotorClient(settings.DATABASE_URL)
+db = client[settings.DATABASE_NAME]
 instance = Instance.from_db(db)
 
 
@@ -39,7 +34,7 @@ class Media(Document):
     caption = fields.StrField(allow_none=True)
 
     class Meta:
-        collection_name = COLLECTION_NAME
+        collection_name = settings.COLLECTION_NAME
         indexes = [
             {"key": [("file_name", "text")]},
             {"key": [("caption", "text")], "sparse": True},
@@ -107,7 +102,7 @@ async def get_search_results(
     except re.error:
         return [], "", 0
 
-    if USE_CAPTION_FILTER:
+    if settings.USE_CAPTION_FILTER:
         mongo_filter = {"$or": [{"file_name": regex}, {"caption": regex}]}
     else:
         mongo_filter = {"file_name": regex}
