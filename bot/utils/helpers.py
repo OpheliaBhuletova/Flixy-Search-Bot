@@ -71,3 +71,20 @@ def last_online(user) -> str:
         return user.last_online_date.strftime("%d %b %Y, %H:%M")
 
     return "Unknown"
+
+from pyrogram.errors import UserNotParticipant
+
+async def is_subscribed(client, query) -> bool:
+    if not query.message or not query.from_user:
+        return True
+
+    try:
+        await client.get_chat_member(
+            query.message.chat.id,
+            query.from_user.id
+        )
+        return True
+    except UserNotParticipant:
+        return False
+    except Exception:
+        return True
