@@ -88,3 +88,13 @@ async def is_subscribed(client, query) -> bool:
         return False
     except Exception:
         return True
+    
+from database.users_chats_db import get_db_instance
+
+async def get_settings(chat_id: int):
+    db = get_db_instance()
+    return await db.get_settings(chat_id)
+
+async def save_group_settings(chat_id: int, settings: dict):
+    db = get_db_instance()
+    await db.update_settings(chat_id, settings)
