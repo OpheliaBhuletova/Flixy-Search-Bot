@@ -5,6 +5,7 @@ tgcrypto>=1.2.5
 # Database (async)
 motor>=3.4.0
 umongo>=3.1.0
+marshmallow>=3.10.0,<4.0.0
 
 # Configuration
 pydantic-settings>=2.1
