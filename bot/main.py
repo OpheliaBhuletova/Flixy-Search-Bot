@@ -63,10 +63,15 @@ class Bot(Client):
 
         self.username = f"@{me.username}"
 
-        # Start web server
-        app = web.AppRunner(await web_server())
-        await app.setup()
-        await web.TCPSite(app, "0.0.0.0", PORT).start()
+        # Start web server (blocking to keep Koyeb alive)
+        web_app = await web_server()
+        runner = web.AppRunner(web_app)
+        await runner.setup()
+        site = web.TCPSite(runner, "0.0.0.0", PORT)
+        await site.start()
+
+        # Block forever so Koyeb does not scale down
+        await asyncio.Event().wait()
 
         logger.info(
             "%s started with Pyrogram v%s (Layer %s) as %s",
