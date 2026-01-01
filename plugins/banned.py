@@ -1,3 +1,4 @@
+from email.mime import message
 from pyrogram import Client, filters
 from pyrogram.types import Message, InlineKeyboardButton, InlineKeyboardMarkup
 
@@ -25,7 +26,7 @@ disabled_group = filters.create(disabled_chat)
 
 @Client.on_message(filters.private & banned_user & filters.incoming)
 async def ban_reply(client: Client, message: Message):
-    db = get_db()
+    # db is already imported
     ban = await db.get_ban_status(message.from_user.id)
     reason = ban.get("ban_reason", "No reason provided")
 
@@ -46,8 +47,8 @@ async def grp_bd(client: Client, message: Message):
     ]]
     reply_markup = InlineKeyboardMarkup(buttons)
 
-    db = get_db()
     chat_data = await db.get_chat(message.chat.id)
+
     reason = chat_data.get("reason", "No reason provided")
 
     sent = await message.reply_text(
