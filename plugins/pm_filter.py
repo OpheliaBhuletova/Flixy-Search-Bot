@@ -14,7 +14,7 @@ from pyrogram.errors.exceptions.bad_request_400 import (
 )
 
 from bot.config import settings
-from bot.text import Text
+
 from database.connections_mdb import (
     active_connection,
     all_connections,

@@ -11,8 +11,8 @@ from database.filters_mdb import (
     count_filters,
 )
 from database.connections_mdb import active_connection
-from bot.utils.media import get_file_id
-from bot.utils.text import parser, split_quotes
+from bot.utils.helpers import get_file_id
+from bot.utils.text_parser import parser, split_quotes
 
 
 @Client.on_message(filters.command(["filter", "add"]) & filters.incoming)

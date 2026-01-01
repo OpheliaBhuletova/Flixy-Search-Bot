@@ -17,7 +17,7 @@ from pyrogram.errors.exceptions.bad_request_400 import (
 
 from bot.config import settings
 from bot.utils.helpers import extract_user, get_file_id, last_online
-from bot.utils.imdb import get_poster
+from bot.services.imdb_service import get_poster
 
 logger = logging.getLogger(__name__)
 

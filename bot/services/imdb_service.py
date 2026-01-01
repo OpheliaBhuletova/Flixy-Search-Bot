@@ -1,6 +1,6 @@
 import re
 from imdb import IMDb
-from bot.constants import LONG_IMDB_DESCRIPTION, MAX_LIST_ELM
+from config import LONG_IMDB_DESCRIPTION, MAX_LIST_ELM
 
 imdb = IMDb()
 
