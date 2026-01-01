@@ -146,5 +146,7 @@ class Database:
         stats = await self.db.command("dbstats")
         return stats.get("dataSize", 0)
 
-
-db = Database(DATABASE_URL, DATABASE_NAME)
+db = Database(
+    settings.DATABASE_URL,
+    settings.DATABASE_NAME
+)
