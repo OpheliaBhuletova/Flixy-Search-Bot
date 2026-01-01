@@ -11,7 +11,7 @@ from database.users_chats_db import db
 from database.ia_filterdb import Media
 from bot.utils.cache import RuntimeCache
 from bot.utils.helpers import get_size, get_settings
-from bot.utils.messages import Text
+from bot.utils.messages import Texts as Text
 
 
 @Client.on_message(filters.new_chat_members & filters.group)
