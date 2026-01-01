@@ -7,8 +7,8 @@ from pyrogram.errors.exceptions.bad_request_400 import (
 )
 
 from bot.config import settings
-from bot.database.users_chats_db import db
-from bot.database.ia_filterdb import Media
+from database.users_chats_db import db
+from database.ia_filterdb import Media
 from bot.utils.cache import RuntimeCache
 from bot.utils.helpers import get_size, get_settings
 from bot.text import Text

@@ -5,7 +5,7 @@ import datetime
 from pyrogram import Client, filters
 from pyrogram.types import Message
 
-from bot.database.users_chats_db import db
+from database.users_chats_db import get_db
 from bot.config import settings
 from bot.utils.broadcast import broadcast_messages
 
@@ -16,6 +16,7 @@ from bot.utils.broadcast import broadcast_messages
     & filters.reply
 )
 async def broadcast_handler(client: Client, message: Message):
+    db = get_db()
     users = await db.get_all_users()
     broadcast_msg = message.reply_to_message
 

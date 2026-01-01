@@ -4,7 +4,7 @@ from pyrogram import Client, filters, enums
 from pyrogram.types import InlineKeyboardButton, InlineKeyboardMarkup, Message
 
 from bot.config import settings
-from bot.database.connections_mdb import (
+from database.connections_mdb import (
     add_connection,
     all_connections,
     if_active,

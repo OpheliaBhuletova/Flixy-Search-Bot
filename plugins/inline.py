@@ -12,7 +12,7 @@ from pyrogram.errors.exceptions.bad_request_400 import QueryIdInvalid
 from bot.config import settings
 from bot.utils.cache import RuntimeCache
 from bot.utils.helpers import is_subscribed, get_size
-from bot.database.ia_filterdb import get_search_results
+from database.ia_filterdb import get_search_results
 
 logger = logging.getLogger(__name__)
 

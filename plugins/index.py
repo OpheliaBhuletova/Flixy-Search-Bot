@@ -19,7 +19,7 @@ from pyrogram.errors.exceptions.bad_request_400 import (
 
 from bot.config import settings
 from bot.utils.cache import RuntimeCache
-from bot.database.ia_filterdb import save_file
+from database.ia_filterdb import save_file
 
 logger = logging.getLogger(__name__)
 

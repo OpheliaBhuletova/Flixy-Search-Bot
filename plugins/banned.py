@@ -2,7 +2,7 @@ from pyrogram import Client, filters
 from pyrogram.types import Message, InlineKeyboardButton, InlineKeyboardMarkup
 
 from bot.utils.cache import RuntimeCache
-from bot.database.users_chats_db import db
+from database.users_chats_db import get_db
 from bot.config import settings
 
 
@@ -25,6 +25,7 @@ disabled_group = filters.create(disabled_chat)
 
 @Client.on_message(filters.private & banned_user & filters.incoming)
 async def ban_reply(client: Client, message: Message):
+    db = get_db()
     ban = await db.get_ban_status(message.from_user.id)
     reason = ban.get("ban_reason", "No reason provided")
 
@@ -45,6 +46,7 @@ async def grp_bd(client: Client, message: Message):
     ]]
     reply_markup = InlineKeyboardMarkup(buttons)
 
+    db = get_db()
     chat_data = await db.get_chat(message.chat.id)
     reason = chat_data.get("reason", "No reason provided")
 

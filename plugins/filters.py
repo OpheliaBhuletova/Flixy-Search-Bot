@@ -10,7 +10,7 @@ from bot.database.filters_mdb import (
     delete_filter,
     count_filters,
 )
-from bot.database.connections_mdb import active_connection
+from database.connections_mdb import active_connection
 from bot.utils.media import get_file_id
 from bot.utils.text import parser, split_quotes
 

@@ -2,7 +2,7 @@ from pyrogram import Client, filters
 from pyrogram.types import Message
 
 from bot.config import settings
-from bot.database.ia_filterdb import save_file
+from database.ia_filterdb import save_file
 
 
 MEDIA_FILTER = filters.document | filters.video | filters.audio

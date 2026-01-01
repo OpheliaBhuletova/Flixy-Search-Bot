@@ -15,7 +15,7 @@ from pyrogram.errors.exceptions.bad_request_400 import (
 
 from bot.config import settings
 from bot.text import Text
-from bot.database.connections_mdb import (
+from database.connections_mdb import (
     active_connection,
     all_connections,
     delete_connection,
@@ -23,8 +23,8 @@ from bot.database.connections_mdb import (
     make_active,
     make_inactive,
 )
-from bot.database.users_chats_db import db
-from bot.database.ia_filterdb import (
+from database.users_chats_db import db
+from database.ia_filterdb import (
     Media,
     get_file_details,
     get_search_results,

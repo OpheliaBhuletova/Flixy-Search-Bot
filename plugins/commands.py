@@ -17,9 +17,9 @@ from bot.utils.cache import RuntimeCache
 from bot.utils.helpers import get_size, is_subscribed
 from bot.utils.settings import get_settings, save_group_settings
 
-from bot.database.ia_filterdb import Media, get_file_details, unpack_new_file_id
-from bot.database.users_chats_db import db
-from bot.database.connections_mdb import active_connection
+from database.ia_filterdb import Media, get_file_details, unpack_new_file_id
+from database.users_chats_db import db
+from database.connections_mdb import active_connection
 
 logger = logging.getLogger(__name__)
 
