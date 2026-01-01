@@ -157,3 +157,5 @@ def get_db_instance():
             settings.DATABASE_NAME
         )
     return _db_instance
+
+db = Database(settings.DATABASE_URL, settings.DATABASE_NAME)

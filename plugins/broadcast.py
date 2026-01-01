@@ -5,7 +5,8 @@ import datetime
 from pyrogram import Client, filters
 from pyrogram.types import Message
 
-from database.users_chats_db import get_db
+from database.users_chats_db import db
+
 from bot.config import settings
 from bot.utils.broadcast import broadcast_messages
 

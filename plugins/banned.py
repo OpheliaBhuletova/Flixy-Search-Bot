@@ -2,7 +2,7 @@ from pyrogram import Client, filters
 from pyrogram.types import Message, InlineKeyboardButton, InlineKeyboardMarkup
 
 from bot.utils.cache import RuntimeCache
-from database.users_chats_db import get_db
+from database.users_chats_db import db
 from bot.config import settings
 
 
