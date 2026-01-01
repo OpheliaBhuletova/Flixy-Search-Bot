@@ -1,6 +1,6 @@
 import re
 from imdb import IMDb
-from config import LONG_IMDB_DESCRIPTION, MAX_LIST_ELM
+from bot.config import settings
 
 imdb = IMDb()
 
@@ -8,8 +8,8 @@ imdb = IMDb()
 def list_to_str(data):
     if not data:
         return "N/A"
-    if MAX_LIST_ELM:
-        data = data[:int(MAX_LIST_ELM)]
+    if settings.MAX_LIST_ELM:
+        data = data[:int(settings.MAX_LIST_ELM)]
     return ", ".join(map(str, data))
 
 
@@ -31,7 +31,7 @@ async def get_poster(query: str, *, bulk=False, imdb_id=False, file=None):
 
     movie = imdb.get_movie(imdb_id)
 
-    plot = movie.get("plot outline") if LONG_IMDB_DESCRIPTION else (
+    plot = movie.get("plot outline") if settings.LONG_IMDB_DESCRIPTION else (
         movie.get("plot")[0] if movie.get("plot") else "N/A"
     )
 
