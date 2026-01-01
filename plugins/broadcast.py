@@ -17,7 +17,6 @@ from bot.utils.broadcast import broadcast_messages
     & filters.reply
 )
 async def broadcast_handler(client: Client, message: Message):
-    db = get_db()
     users = await db.get_all_users()
     broadcast_msg = message.reply_to_message
 
