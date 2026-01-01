@@ -147,4 +147,4 @@ class Database:
         return stats.get("dataSize", 0)
 
 
-db = Database(DATABASE_URI, DATABASE_NAME)
+db = Database(DATABASE_URL, DATABASE_NAME)
