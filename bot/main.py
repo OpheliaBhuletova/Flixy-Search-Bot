@@ -11,7 +11,7 @@ from pyrogram import types
 from aiohttp import web
 
 from bot.config import settings, LOG_STR
-from database.users_chats_db import db
+from database.users_chats_db import get_db_instance
 from database.ia_filterdb import Media
 from bot.utils.cache import RuntimeCache
 from plugins import web_server
@@ -46,6 +46,7 @@ class Bot(Client):
 
     async def start(self):
         # Load banned users/chats
+        db = get_db_instance()
         banned_users, banned_chats = await db.get_banned()
         RuntimeCache.banned_users = banned_users
         RuntimeCache.banned_chats = banned_chats

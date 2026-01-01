@@ -9,10 +9,7 @@ from bot.config import settings
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.ERROR)
 
-# ─── Mongo Client ───────────────────────────────────────────────────────
-mongo_client = AsyncIOMotorClient(settings.DATABASE_URL)
-database = mongo_client[settings.DATABASE_NAME]
-
+from database.mongo import get_db
 
 # ─── Filters ────────────────────────────────────────────────────────────
 
@@ -24,7 +21,8 @@ async def add_filter(
     file: Optional[str],
     alert: Optional[str],
 ) -> None:
-    collection = database[str(grp_id)]
+    collection = get_db()[str(grp_id)]
+
 
     data = {
         "text": str(text),
@@ -48,7 +46,8 @@ async def add_filter(
 
 
 async def find_filter(group_id: int, name: str) -> Tuple:
-    collection = database[str(group_id)]
+    collection = get_db()[str(group_id)]
+
 
     try:
         doc = await collection.find_one({"text": name})
@@ -68,7 +67,7 @@ async def find_filter(group_id: int, name: str) -> Tuple:
 
 
 async def get_filters(group_id: int) -> List[str]:
-    collection = database[str(group_id)]
+    collection = get_db()[str(group_id)]
     texts: List[str] = []
 
     try:
@@ -81,7 +80,7 @@ async def get_filters(group_id: int) -> List[str]:
 
 
 async def delete_filter(message, text: str, group_id: int) -> None:
-    collection = database[str(group_id)]
+    collection = get_db()[str(group_id)]
 
     count = await collection.count_documents({"text": text})
     if count == 1:
@@ -98,12 +97,12 @@ async def delete_filter(message, text: str, group_id: int) -> None:
 async def del_all(message, group_id: int, title: str) -> None:
     collection_name = str(group_id)
 
-    if collection_name not in await database.list_collection_names():
+    if collection_name not in await get_db().list_collection_names():
         await message.edit_text(f"Nothing to remove in {title}!")
         return
 
     try:
-        await database.drop_collection(collection_name)
+        await get_db().drop_collection(collection_name)
         await message.edit_text(f"All filters from **{title}** have been removed.")
     except Exception as e:
         logger.exception("Failed to delete all filters", exc_info=e)
@@ -111,20 +110,20 @@ async def del_all(message, group_id: int, title: str) -> None:
 
 
 async def count_filters(group_id: int) -> Optional[int]:
-    collection = database[str(group_id)]
+    collection = get_db()[str(group_id)]
     count = await collection.count_documents({})
     return count if count > 0 else False
 
 
 async def filter_stats() -> Tuple[int, int]:
-    collections = await database.list_collection_names()
+    collections = await get_db().list_collection_names()
 
     if "CONNECTION" in collections:
         collections.remove("CONNECTION")
 
     total_count = 0
     for name in collections:
-        collection = database[name]
+        collection = get_db()[name]
         total_count += await collection.count_documents({})
 
     return len(collections), total_count

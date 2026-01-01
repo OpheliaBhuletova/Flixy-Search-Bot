@@ -7,6 +7,7 @@ logger = logging.getLogger(__name__)
 logger.setLevel(logging.WARNING)
 
 
+
 class Database:
     def __init__(self, uri, database_name):
         self._client = motor.motor_asyncio.AsyncIOMotorClient(uri)
@@ -122,13 +123,13 @@ class Database:
     # ─── Settings ────────────────────────────────────────────────────────
     def default_settings(self):
         return {
-            "button": SINGLE_BUTTON,
-            "botpm": P_TTI_SHOW_OFF,
-            "file_secure": PROTECT_CONTENT,
-            "imdb": IMDB,
-            "spell_check": SPELL_CHECK_REPLY,
-            "welcome": MELCOW_NEW_USERS,
-            "template": IMDB_TEMPLATE,
+            "button": settings.SINGLE_BUTTON,
+            "botpm": settings.P_TTI_SHOW_OFF,
+            "file_secure": settings.PROTECT_CONTENT,
+            "imdb": settings.IMDB,
+            "spell_check": settings.SPELL_CHECK_REPLY,
+            "welcome": settings.MELCOW_NEW_USERS,
+            "template": settings.IMDB_TEMPLATE,
         }
 
     async def update_settings(self, id, settings):
@@ -146,7 +147,13 @@ class Database:
         stats = await self.db.command("dbstats")
         return stats.get("dataSize", 0)
 
-db = Database(
-    settings.DATABASE_URL,
-    settings.DATABASE_NAME
-)
+_db_instance = None
+
+def get_db_instance():
+    global _db_instance
+    if _db_instance is None:
+        _db_instance = Database(
+            settings.DATABASE_URL,
+            settings.DATABASE_NAME
+        )
+    return _db_instance

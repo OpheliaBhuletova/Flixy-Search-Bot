@@ -8,10 +8,10 @@ from bot.config import settings
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.ERROR)
 
-# ─── Mongo Client ───────────────────────────────────────────────────────
-mongo_client = AsyncIOMotorClient(settings.DATABASE_URL)
-database = mongo_client[settings.DATABASE_NAME]
-collection = database["CONNECTION"]
+from database.mongo import get_db
+
+def get_collection():
+    return get_db()["CONNECTION"]
 
 
 # ─── Connection Management ──────────────────────────────────────────────
@@ -20,6 +20,7 @@ async def add_connection(group_id: str, user_id: str) -> bool:
     """
     Add a group connection for a user and set it as active.
     """
+    collection = get_collection()
     try:
         query = await collection.find_one(
             {"_id": user_id},
@@ -60,6 +61,7 @@ async def active_connection(user_id: str) -> Optional[int]:
     """
     Return currently active group ID for a user.
     """
+    collection = get_collection()
     query = await collection.find_one(
         {"_id": user_id},
         {"_id": 0, "group_details": 0},
@@ -76,6 +78,7 @@ async def all_connections(user_id: str) -> Optional[List[str]]:
     """
     Return all connected group IDs for a user.
     """
+    collection = get_collection()
     query = await collection.find_one(
         {"_id": user_id},
         {"_id": 0, "active_group": 0},
@@ -91,6 +94,7 @@ async def if_active(user_id: str, group_id: str) -> bool:
     """
     Check if a group is the currently active connection.
     """
+    collection = get_collection()
     query = await collection.find_one(
         {"_id": user_id},
         {"_id": 0, "group_details": 0},
@@ -103,6 +107,7 @@ async def make_active(user_id: str, group_id: str) -> bool:
     """
     Set a group as active connection.
     """
+    collection = get_collection()
     result = await collection.update_one(
         {"_id": user_id},
         {"$set": {"active_group": group_id}},
@@ -114,6 +119,7 @@ async def make_inactive(user_id: str) -> bool:
     """
     Remove active group connection.
     """
+    collection = get_collection()
     result = await collection.update_one(
         {"_id": user_id},
         {"$set": {"active_group": None}},
@@ -125,6 +131,7 @@ async def delete_connection(user_id: str, group_id: str) -> bool:
     """
     Delete a group connection and reassign active group if needed.
     """
+    collection = get_collection()
     try:
         result = await collection.update_one(
             {"_id": user_id},

@@ -16,10 +16,10 @@ from bot.config import settings
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.WARNING)
 
-# ─── Mongo Setup ─────────────────────────────────────────────────────────
-client = AsyncIOMotorClient(settings.DATABASE_URL)
-db = client[settings.DATABASE_NAME]
-instance = Instance.from_db(db)
+from database.mongo import get_db
+from umongo import Instance
+
+instance = Instance.from_db(get_db())
 
 
 # ─── Media Document ──────────────────────────────────────────────────────
