@@ -34,11 +34,12 @@ from bot.utils.cache import RuntimeCache
 from bot.utils.helpers import (
     get_size,
     is_subscribed,
-    get_poster,
     search_gagala,
     get_settings,
     save_group_settings,
 )
+
+from bot.services.imdb_service import get_poster
 
 logger = logging.getLogger(__name__)
 
