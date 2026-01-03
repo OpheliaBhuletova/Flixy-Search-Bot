@@ -8,7 +8,6 @@ umongo>=3.1.0
 marshmallow>=3.10.0,<4.0.0
 
 # Configuration
-pydantic-settings>=2.1
 python-dotenv>=1.0
 
 # IMDb integration
@@ -17,5 +16,3 @@ IMDbPY>=2022.7.9
 # HTTP & parsing
 httpx>=0.25
 beautifulsoup4>=4.12
-
-aiohttp>=3.9.0
