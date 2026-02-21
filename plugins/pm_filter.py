@@ -56,6 +56,23 @@ async def group_message_router(client: Client, message):
         await auto_filter(client, message)
 
 
+# ---------------- PRIVATE MESSAGE HANDLER ---------------- #
+
+@Client.on_message(filters.private & filters.text & filters.incoming)
+async def private_message_router(client: Client, message):
+    """Handle plain-text movie requests in private chats.
+
+    Treat non-command short messages as search queries and reuse the
+    existing auto_filter logic so users get the same results in PM.
+    """
+    # ignore commands and long messages
+    if message.text.startswith("/") or len(message.text) > 300:
+        return
+
+    # reuse auto_filter implementation for private chats
+    await auto_filter(client, message)
+
+
 # ---------------- PAGINATION ---------------- #
 
 @Client.on_callback_query(filters.regex(r"^next_"))
