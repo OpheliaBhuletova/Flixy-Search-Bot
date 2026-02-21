@@ -190,7 +190,7 @@ async def help_about_callback_handler(client: Client, callback: CallbackQuery):
         buttons = [
             [
                 InlineKeyboardButton("🔍 Search", switch_inline_query_current_chat=""),
-                InlineKeyboardButton("🤖 Updates", url="https://t.me/+VbQUA9MDA7A2ODRl"),
+                InlineKeyboardButton("🤖 Updates", url="https://t.me/+svD1FU_ty1Y3MmQ1"),
             ],
             [
                 InlineKeyboardButton("ℹ️ Help", callback_data="help"),
@@ -207,7 +207,7 @@ async def help_about_callback_handler(client: Client, callback: CallbackQuery):
                 InputMediaPhoto(
                     media=random.choice(settings.PICS),
                     caption=caption,
-                    parse_mode=enums.ParseMode.MARKDOWN,
+                    parse_mode=enums.ParseMode.HTML,
                 ),
                 reply_markup=InlineKeyboardMarkup(buttons),
             )
@@ -216,7 +216,7 @@ async def help_about_callback_handler(client: Client, callback: CallbackQuery):
                 await callback.message.edit_text(
                     caption,
                     reply_markup=InlineKeyboardMarkup(buttons),
-                    parse_mode=enums.ParseMode.MARKDOWN,
+                    parse_mode=enums.ParseMode.HTML,
                 )
             except Exception:
                 # if editing fails just send a new message as fallback

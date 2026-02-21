@@ -2,9 +2,10 @@ import asyncio
 import logging
 import logging.config
 import os
+from datetime import datetime
 from typing import Union, Optional, AsyncGenerator
 
-from pyrogram import Client, __version__, idle
+from pyrogram import Client, __version__, idle, enums
 from pyrogram.raw.all import layer
 from pyrogram import types
 from pyrogram.errors import FloodWait
@@ -113,11 +114,9 @@ class Bot(Client):
         RuntimeCache.bot_username = me.username
         RuntimeCache.bot_name = me.first_name
         RuntimeCache.current = me.id
+        RuntimeCache.startup_time = datetime.now()
 
         self.username = f"@{me.username}"
-
-        # Block forever so Koyeb does not scale down
-        await asyncio.Event().wait()
 
         logger.info(
             "%s started with Pyrogram v%s (Layer %s) as %s",
@@ -127,6 +126,26 @@ class Bot(Client):
             self.username,
         )
         logger.info(LOG_STR)
+
+        # Send startup message to logs channel
+        if settings.LOG_CHANNEL:
+            try:
+                startup_text = f"""<b>🟢 System Status — ONLINE</b>
+<code>Bot: {me.first_name}
+Version: v2.0
+Uptime: Just started
+
+Startup completed successfully.</code>"""
+                await self.send_message(
+                    settings.LOG_CHANNEL,
+                    startup_text,
+                    parse_mode=enums.ParseMode.HTML,
+                )
+            except Exception as e:
+                logger.error("Failed to send startup message to LOG_CHANNEL: %s", e)
+
+        # Block forever so Koyeb does not scale down
+        await asyncio.Event().wait()
 
     async def stop(self, *args):
         await super().stop()
