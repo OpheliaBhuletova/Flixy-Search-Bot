@@ -119,7 +119,7 @@ async def start_handler(client: Client, message: Message):
                 RuntimeCache.bot_username,
             ),
             reply_markup=InlineKeyboardMarkup(buttons),
-            parse_mode=enums.ParseMode.MARKDOWN
+            parse_mode=enums.ParseMode.HTML
         )
         return
 

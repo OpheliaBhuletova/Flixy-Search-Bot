@@ -9,9 +9,9 @@ class Texts:
 
     START_TXT = """
 👋 Hey {},  
-Welcome to **{}** — your smart movie search companion!
+Welcome to <b>{}</b> — your smart movie search companion!
 
-🎬 Just **type any movie name** and I’ll find it for you instantly.  
+🎬 Just <b>type any movie name</b> and I'll find it for you instantly.  
 Sit back, relax, and enjoy unlimited entertainment 🍿✨
 """
 

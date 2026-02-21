@@ -136,11 +136,15 @@ Version: v2.0
 Uptime: Just started
 
 Startup completed successfully.</code>"""
+                # Ensure LOG_CHANNEL is an integer
+                channel_id = int(settings.LOG_CHANNEL) if isinstance(settings.LOG_CHANNEL, str) else settings.LOG_CHANNEL
                 await self.send_message(
-                    settings.LOG_CHANNEL,
+                    channel_id,
                     startup_text,
                     parse_mode=enums.ParseMode.HTML,
                 )
+            except ValueError as ve:
+                logger.error("Invalid LOG_CHANNEL format (must be an integer): %s", settings.LOG_CHANNEL)
             except Exception as e:
                 logger.error("Failed to send startup message to LOG_CHANNEL: %s", e)
 
