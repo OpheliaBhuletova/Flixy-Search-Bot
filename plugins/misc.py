@@ -188,20 +188,25 @@ async def help_about_callback_handler(client: Client, callback: CallbackQuery):
         text = Texts.HELP_TXT
         parse_mode = enums.ParseMode.MARKDOWN
         buttons = [
-            [InlineKeyboardButton("🔍 Search / IMDb", callback_data="cat_search")],
             [
+                InlineKeyboardButton("🔍 Search / IMDb", callback_data="cat_search"),
                 InlineKeyboardButton("🎛 Filters", callback_data="cat_filters"),
-                InlineKeyboardButton("🔗 Connections", callback_data="cat_connections"),
             ],
-            [InlineKeyboardButton("🔐 Admin", callback_data="cat_admin")],
-            [InlineKeyboardButton("🔐 Close", callback_data="close_data")],
+            [
+                InlineKeyboardButton("🔗 Connections", callback_data="cat_connections"),
+                InlineKeyboardButton("🔑 Admin", callback_data="cat_admin"),
+            ],
+            [
+                InlineKeyboardButton("◀️ Back", callback_data="start"),
+                InlineKeyboardButton("❌ Close", callback_data="close_data"),
+            ],
         ]
     elif data == "about":  # about
         text = Texts.ABOUT_TXT.format(
             client.me.first_name if client.me else "Bot"
         )
         parse_mode = enums.ParseMode.HTML
-        buttons = [[InlineKeyboardButton("🔐 Close", callback_data="close_data")]]
+        buttons = [[InlineKeyboardButton("❌ Close", callback_data="close_data")]]
     elif data.startswith("cat_"):
         cat = data.split("_", 1)[1]
         if cat == "admin":
