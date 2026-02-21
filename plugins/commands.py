@@ -52,6 +52,7 @@ async def start_handler(client: Client, message: Message):
                 RuntimeCache.bot_username,
             ),
             reply_markup=InlineKeyboardMarkup(buttons),
+            parse_mode=enums.ParseMode.MARKDOWN,
         )
 
         await asyncio.sleep(2)
@@ -108,7 +109,7 @@ async def start_handler(client: Client, message: Message):
                 RuntimeCache.bot_username,
             ),
             reply_markup=InlineKeyboardMarkup(buttons),
-            parse_mode=enums.ParseMode.HTML
+            parse_mode=enums.ParseMode.MARKDOWN
         )
         return
 

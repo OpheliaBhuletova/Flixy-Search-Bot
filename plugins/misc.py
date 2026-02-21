@@ -17,6 +17,7 @@ from pyrogram.errors.exceptions.bad_request_400 import (
 
 from bot.config import settings
 from bot.utils.helpers import extract_user, get_file_id, last_online
+from bot.utils.messages import Texts
 from bot.services.imdb_service import get_poster
 
 logger = logging.getLogger(__name__)
@@ -173,4 +174,34 @@ async def imdb_callback_handler(client: Client, callback: CallbackQuery):
         )
 
     await callback.message.delete()
+    await callback.answer()
+
+
+@Client.on_callback_query(filters.regex("^(help|about)$"))
+async def help_about_callback_handler(client: Client, callback: CallbackQuery):
+    """Handle Help and About callback buttons."""
+    data = callback.data
+    
+    if data == "help":
+        text = Texts.HELP_TXT
+        parse_mode = enums.ParseMode.MARKDOWN
+    else:  # about
+        text = Texts.ABOUT_TXT.format(
+            client.me.first_name if client.me else "Bot"
+        )
+        parse_mode = enums.ParseMode.HTML
+    
+    buttons = [[InlineKeyboardButton("🔐 Close", callback_data="close_data")]]
+    markup = InlineKeyboardMarkup(buttons)
+    
+    try:
+        await callback.message.edit_text(
+            text,
+            reply_markup=markup,
+            parse_mode=parse_mode,
+        )
+    except Exception:
+        await callback.answer("Could not update message", show_alert=True)
+        return
+    
     await callback.answer()
