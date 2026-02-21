@@ -15,3 +15,5 @@ class RuntimeCache:
 
     bot_username: str | None = None
     bot_name: str | None = None
+    startup_time: Any = None
+    index_skip: int = 0

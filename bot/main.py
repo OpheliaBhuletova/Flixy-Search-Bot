@@ -127,28 +127,10 @@ class Bot(Client):
         )
         logger.info(LOG_STR)
 
-        # Send startup message to logs channel
-        if settings.LOG_CHANNEL and settings.LOG_CHANNEL != 0:
-            await asyncio.sleep(2)
-            try:
-                # Force refresh peer list for private channels
-                async for _ in self.get_dialogs(limit=1):
-                    break
-                
-                startup_text = f"""<b>🟢 System Status — ONLINE</b>
-<code>Bot: {me.first_name}
-Version: v2.0
-Uptime: Just started
-
-Startup completed successfully.</code>"""
-                await self.send_message(
-                    settings.LOG_CHANNEL,
-                    startup_text,
-                    parse_mode=enums.ParseMode.HTML,
-                )
-                logger.info("Startup message sent to LOG_CHANNEL successfully")
-            except Exception as e:
-                logger.warning("Could not send startup message to LOG_CHANNEL %s: %s", settings.LOG_CHANNEL, e)
+        # Note: Startup message to LOG_CHANNEL is disabled for private channels
+        # due to Pyrogram peer cache limitations with bots on private channels.
+        # Once the channel receives any message from the bot (e.g., from user logs),
+        # subsequent messages will work normally.
 
         # Block forever so Koyeb does not scale down
         await asyncio.Event().wait()
