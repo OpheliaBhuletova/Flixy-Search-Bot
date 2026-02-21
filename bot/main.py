@@ -128,37 +128,27 @@ class Bot(Client):
         logger.info(LOG_STR)
 
         # Send startup message to logs channel
-        if settings.LOG_CHANNEL:
+        if settings.LOG_CHANNEL and settings.LOG_CHANNEL != 0:
             await asyncio.sleep(2)
             try:
+                # Force refresh peer list for private channels
+                async for _ in self.get_dialogs(limit=1):
+                    break
+                
                 startup_text = f"""<b>🟢 System Status — ONLINE</b>
 <code>Bot: {me.first_name}
 Version: v2.0
 Uptime: Just started
 
 Startup completed successfully.</code>"""
-                # Try with the channel ID as-is (with -100 prefix)
-                channel_id = settings.LOG_CHANNEL
-                if isinstance(channel_id, str):
-                    channel_id = int(channel_id)
-                
-                # Verify peer exists by trying to get chat info first
-                try:
-                    await self.get_chat(channel_id)
-                except Exception as peer_error:
-                    logger.warning("Could not access LOG_CHANNEL %s: %s", channel_id, peer_error)
-                    raise
-                
                 await self.send_message(
-                    channel_id,
+                    settings.LOG_CHANNEL,
                     startup_text,
                     parse_mode=enums.ParseMode.HTML,
                 )
                 logger.info("Startup message sent to LOG_CHANNEL successfully")
-            except ValueError as ve:
-                logger.error("Invalid LOG_CHANNEL format (must be an integer): %s - %s", settings.LOG_CHANNEL, ve)
             except Exception as e:
-                logger.error("Failed to send startup message to LOG_CHANNEL: %s", e)
+                logger.warning("Could not send startup message to LOG_CHANNEL %s: %s", settings.LOG_CHANNEL, e)
 
         # Block forever so Koyeb does not scale down
         await asyncio.Event().wait()
