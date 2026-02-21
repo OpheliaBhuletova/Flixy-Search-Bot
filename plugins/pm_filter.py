@@ -34,10 +34,10 @@ from bot.utils.cache import RuntimeCache
 from bot.utils.helpers import (
     get_size,
     is_subscribed,
-    search_gagala,
     get_settings,
     save_group_settings,
 )
+from bot.services.web_search import search_gagala
 
 from bot.services.imdb_service import get_poster
 
