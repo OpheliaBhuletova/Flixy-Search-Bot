@@ -129,7 +129,6 @@ class Bot(Client):
 
         # Send startup message to logs channel
         if settings.LOG_CHANNEL:
-            # Wait for peer list to sync before sending message
             await asyncio.sleep(2)
             try:
                 startup_text = f"""<b>🟢 System Status — ONLINE</b>
@@ -138,20 +137,26 @@ Version: v2.0
 Uptime: Just started
 
 Startup completed successfully.</code>"""
-                # Handle both integer and string formats
+                # Try with the channel ID as-is (with -100 prefix)
                 channel_id = settings.LOG_CHANNEL
                 if isinstance(channel_id, str):
                     channel_id = int(channel_id)
-                # Remove -100 prefix if present (Pyrogram adds it back automatically)
-                if channel_id < 0 and channel_id < -1000000000:
-                    channel_id = int(str(channel_id)[4:])  # Remove "-100" prefix
+                
+                # Verify peer exists by trying to get chat info first
+                try:
+                    await self.get_chat(channel_id)
+                except Exception as peer_error:
+                    logger.warning("Could not access LOG_CHANNEL %s: %s", channel_id, peer_error)
+                    raise
+                
                 await self.send_message(
                     channel_id,
                     startup_text,
                     parse_mode=enums.ParseMode.HTML,
                 )
+                logger.info("Startup message sent to LOG_CHANNEL successfully")
             except ValueError as ve:
-                logger.error("Invalid LOG_CHANNEL format: %s - Error: %s", settings.LOG_CHANNEL, ve)
+                logger.error("Invalid LOG_CHANNEL format (must be an integer): %s - %s", settings.LOG_CHANNEL, ve)
             except Exception as e:
                 logger.error("Failed to send startup message to LOG_CHANNEL: %s", e)
 
