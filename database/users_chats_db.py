@@ -15,11 +15,14 @@ class Database:
         self.col = self.db.users
         self.grp = self.db.groups
 
-        # Ensure indexes (runs once, cheap if exists)
-        self._ensure_indexes()
+        # Do not create indexes or schedule async work at import time.
+        # Index creation will be performed explicitly from the running
+        # event loop by calling `ensure_indexes()`.
 
     def _ensure_indexes(self):
         try:
+            # Legacy synchronous helper kept for reference. Prefer
+            # using the async `ensure_indexes` method below.
             self.col.create_index("id", unique=True)
             self.col.create_index("ban_status.is_banned")
 
@@ -27,6 +30,19 @@ class Database:
             self.grp.create_index("chat_status.is_disabled")
         except Exception:
             logger.exception("Failed creating MongoDB indexes")
+
+    async def ensure_indexes(self):
+        """Asynchronously create necessary indexes. Call this from a running
+        asyncio event loop (for example during bot startup) so Motor's
+        coroutines are attached to the correct loop."""
+        try:
+            await self.col.create_index("id", unique=True)
+            await self.col.create_index("ban_status.is_banned")
+
+            await self.grp.create_index("id", unique=True)
+            await self.grp.create_index("chat_status.is_disabled")
+        except Exception:
+            logger.exception("Failed creating MongoDB indexes (async)")
 
     # ─── User Helpers ────────────────────────────────────────────────────
     def new_user(self, id, name):
@@ -158,4 +174,7 @@ def get_db_instance():
         )
     return _db_instance
 
-db = Database(settings.DATABASE_URL, settings.DATABASE_NAME)
+# Keep a module-level instance for backwards compatibility. It will be
+# created on import but won't run async index creation until explicitly
+# invoked from the event loop via `ensure_indexes()`.
+db = get_db_instance()

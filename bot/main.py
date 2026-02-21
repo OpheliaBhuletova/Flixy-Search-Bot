@@ -7,6 +7,7 @@ from typing import Union, Optional, AsyncGenerator
 from pyrogram import Client, __version__, idle
 from pyrogram.raw.all import layer
 from pyrogram import types
+from pyrogram.errors import FloodWait
 
 from aiohttp import web
 
@@ -47,18 +48,49 @@ class Bot(Client):
     async def start(self):
         # Load banned users/chats
         db = get_db_instance()
+        # Ensure DB indexes for users/chats are created on the running loop
+        try:
+            await db.ensure_indexes()
+        except Exception:
+            logger.exception("Failed to ensure users/chats indexes")
         banned_users, banned_chats = await db.get_banned()
         RuntimeCache.banned_users = banned_users
         RuntimeCache.banned_chats = banned_chats
 
-        await super().start()
+        # start the web server early so health checks stay happy even if
+        # bot authorization is delayed by a FloodWait
+        web_app = await web_server()
+        runner = web.AppRunner(web_app)
+        await runner.setup()
+        site = web.TCPSite(runner, "0.0.0.0", PORT)
+        await site.start()
+
+        # start Pyrogram client and handle authorization flood waits
+        while True:
+            try:
+                await super().start()
+                break
+            except FloodWait as fw:  # Telegram rate limit
+                wait = getattr(fw, 'x', None) or getattr(fw, 'value', None) or getattr(fw, 'seconds', None)
+                if wait is None:
+                    wait = fw.args[0] if fw.args else None
+                logger.warning(
+                    "FloodWait on bot authorization (%s seconds), sleeping before retry",
+                    wait,
+                )
+                if wait:
+                    await asyncio.sleep(wait)
+                # loop and try again
 
         # Ensure DB indexes
         try:
             await Media.ensure_indexes()
         except Exception as e:  # pymongo.errors.OperationFailure if index already exists
             msg = str(e)
-            if "only one text index" in msg or getattr(e, 'code', None) == 67:
+            # handle both "only one text index" (code 67) and
+            # "equivalent index exists with different name/options" (code 85)
+            if ("only one text index" in msg
+                    or getattr(e, 'code', None) in (67, 85)):
                 logger.warning("text index conflict detected; attempting to repair indexes: %s", e)
                 # remove any existing text indexes so the new compound index can be created
                 try:
@@ -83,13 +115,6 @@ class Bot(Client):
         RuntimeCache.current = me.id
 
         self.username = f"@{me.username}"
-
-        # Start web server (blocking to keep Koyeb alive)
-        web_app = await web_server()
-        runner = web.AppRunner(web_app)
-        await runner.setup()
-        site = web.TCPSite(runner, "0.0.0.0", PORT)
-        await site.start()
 
         # Block forever so Koyeb does not scale down
         await asyncio.Event().wait()
