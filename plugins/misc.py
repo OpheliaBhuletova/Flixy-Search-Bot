@@ -186,12 +186,7 @@ async def help_about_callback_handler(client: Client, callback: CallbackQuery):
     
     # initial menu or category selection
     if data == "start":
-        # return user to the normal start menu (private chat only)
-        # remove the help/about message and resend the start photo + text
-        try:
-            await callback.message.delete()
-        except Exception:
-            pass
+        # replace current message with the start screen instead of sending a new one
         buttons = [
             [
                 InlineKeyboardButton("🔍 Search", switch_inline_query_current_chat=""),
@@ -202,15 +197,35 @@ async def help_about_callback_handler(client: Client, callback: CallbackQuery):
                 InlineKeyboardButton("😊 About", callback_data="about"),
             ],
         ]
-        await callback.message.reply_photo(
-            random.choice(settings.PICS),
-            caption=Texts.START_TXT.format(
-                callback.message.from_user.mention,
-                RuntimeCache.bot_username,
-            ),
-            reply_markup=InlineKeyboardMarkup(buttons),
-            parse_mode=enums.ParseMode.MARKDOWN,
+        caption = Texts.START_TXT.format(
+            callback.from_user.mention,
+            RuntimeCache.bot_username,
         )
+        # try editing media (to show a photo) first, falling back to edit_text
+        try:
+            await callback.message.edit_media(
+                InputMediaPhoto(
+                    media=random.choice(settings.PICS),
+                    caption=caption,
+                    parse_mode=enums.ParseMode.MARKDOWN,
+                ),
+                reply_markup=InlineKeyboardMarkup(buttons),
+            )
+        except Exception:
+            try:
+                await callback.message.edit_text(
+                    caption,
+                    reply_markup=InlineKeyboardMarkup(buttons),
+                    parse_mode=enums.ParseMode.MARKDOWN,
+                )
+            except Exception:
+                # if editing fails just send a new message as fallback
+                await callback.message.reply_photo(
+                    random.choice(settings.PICS),
+                    caption=caption,
+                    reply_markup=InlineKeyboardMarkup(buttons),
+                    parse_mode=enums.ParseMode.MARKDOWN,
+                )
         await callback.answer()
         return
 
@@ -237,7 +252,7 @@ async def help_about_callback_handler(client: Client, callback: CallbackQuery):
         )
         parse_mode = enums.ParseMode.HTML
         buttons = [[
-            InlineKeyboardButton("◀️ Back", callback_data="help"),
+            InlineKeyboardButton("◀️ Back", callback_data="start"),
             InlineKeyboardButton("❌ Close", callback_data="close_data"),
         ]]
     elif data.startswith("cat_"):
