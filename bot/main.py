@@ -129,6 +129,8 @@ class Bot(Client):
 
         # Send startup message to logs channel
         if settings.LOG_CHANNEL:
+            # Wait for peer list to sync before sending message
+            await asyncio.sleep(2)
             try:
                 startup_text = f"""<b>🟢 System Status — ONLINE</b>
 <code>Bot: {me.first_name}
