@@ -136,12 +136,21 @@ async def generate_batch_link_handler(client: Client, message: Message):
     with open(filename, "w") as f:
         json.dump(out, f)
 
-    post = await client.send_document(
-        settings.LOG_CHANNEL,
-        filename,
-        caption="Generated batch file for filestore.",
-    )
+    post = None
+    if settings.LOG_CHANNEL:
+        try:
+            post = await client.send_document(
+                settings.LOG_CHANNEL,
+                filename,
+                caption="Generated batch file for filestore.",
+            )
+        except Exception:
+            logger.exception("Failed to upload batch file to LOG_CHANNEL")
+
     os.remove(filename)
+
+    if not post:
+        return await status.edit("Failed to upload batch file to the log channel.")
 
     batch_file_id, _ = unpack_new_file_id(post.document.file_id)
     await status.edit(

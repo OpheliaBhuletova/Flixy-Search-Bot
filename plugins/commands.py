@@ -9,6 +9,7 @@ import logging
 
 from pyrogram import Client, filters, enums
 from pyrogram.errors import ChatAdminRequired, FloodWait
+from pyrogram.errors.exceptions.bad_request_400 import PeerIdInvalid
 from pyrogram.types import InlineKeyboardButton, InlineKeyboardMarkup, Message
 
 from bot.config import settings
@@ -57,25 +58,37 @@ async def start_handler(client: Client, message: Message):
 
         if not await db.get_chat(message.chat.id):
             members = await client.get_chat_members_count(message.chat.id)
-            await client.send_message(
-                settings.LOG_CHANNEL,
-                Texts.LOG_TEXT_G.format(
-                    message.chat.title,
-                    message.chat.id,
-                    members,
-                    "Unknown"
-                )
-            )
+            if settings.LOG_CHANNEL:
+                try:
+                    await client.send_message(
+                        settings.LOG_CHANNEL,
+                        Texts.LOG_TEXT_G.format(
+                            message.chat.title,
+                            message.chat.id,
+                            members,
+                            "Unknown",
+                        ),
+                    )
+                except (PeerIdInvalid, ValueError) as e:
+                    logger.warning("Failed to send log message to LOG_CHANNEL %s: %s", settings.LOG_CHANNEL, e)
+                except Exception:
+                    logger.exception("Unexpected error sending log message to LOG_CHANNEL")
             await db.add_chat(message.chat.id, message.chat.title)
         return
 
     # ── PRIVATE START ──
     if not await db.is_user_exist(message.from_user.id):
         await db.add_user(message.from_user.id, message.from_user.first_name)
-        await client.send_message(
-            settings.LOG_CHANNEL,
-            Texts.LOG_TEXT_P.format(message.from_user.id, message.from_user.mention)
-        )
+        if settings.LOG_CHANNEL:
+            try:
+                await client.send_message(
+                    settings.LOG_CHANNEL,
+                    Texts.LOG_TEXT_P.format(message.from_user.id, message.from_user.mention),
+                )
+            except (PeerIdInvalid, ValueError) as e:
+                logger.warning("Failed to send log message to LOG_CHANNEL %s: %s", settings.LOG_CHANNEL, e)
+            except Exception:
+                logger.exception("Unexpected error sending log message to LOG_CHANNEL")
 
     if len(message.command) != 2:
         buttons = [

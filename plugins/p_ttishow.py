@@ -22,12 +22,18 @@ async def on_bot_added(client: Client, message):
         if not await db.get_chat(message.chat.id):
             total = await client.get_chat_members_count(message.chat.id)
             added_by = message.from_user.mention if message.from_user else "Anonymous"
-            await client.send_message(
-                settings.LOG_CHANNEL,
-                Text.LOG_TEXT_G.format(
-                    message.chat.title, message.chat.id, total, added_by
-                ),
-            )
+            if settings.LOG_CHANNEL:
+                try:
+                    await client.send_message(
+                        settings.LOG_CHANNEL,
+                        Text.LOG_TEXT_G.format(
+                            message.chat.title, message.chat.id, total, added_by
+                        ),
+                    )
+                except (PeerIdInvalid, ValueError) as e:
+                    logger.warning("Failed to send log message to LOG_CHANNEL %s: %s", settings.LOG_CHANNEL, e)
+                except Exception:
+                    logger.exception("Unexpected error sending log message to LOG_CHANNEL")
             await db.add_chat(message.chat.id, message.chat.title)
 
         if message.chat.id in RuntimeCache.banned_chats:
