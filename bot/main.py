@@ -136,15 +136,20 @@ Version: v2.0
 Uptime: Just started
 
 Startup completed successfully.</code>"""
-                # Ensure LOG_CHANNEL is an integer
-                channel_id = int(settings.LOG_CHANNEL) if isinstance(settings.LOG_CHANNEL, str) else settings.LOG_CHANNEL
+                # Handle both integer and string formats
+                channel_id = settings.LOG_CHANNEL
+                if isinstance(channel_id, str):
+                    channel_id = int(channel_id)
+                # Remove -100 prefix if present (Pyrogram adds it back automatically)
+                if channel_id < 0 and channel_id < -1000000000:
+                    channel_id = int(str(channel_id)[4:])  # Remove "-100" prefix
                 await self.send_message(
                     channel_id,
                     startup_text,
                     parse_mode=enums.ParseMode.HTML,
                 )
             except ValueError as ve:
-                logger.error("Invalid LOG_CHANNEL format (must be an integer): %s", settings.LOG_CHANNEL)
+                logger.error("Invalid LOG_CHANNEL format: %s - Error: %s", settings.LOG_CHANNEL, ve)
             except Exception as e:
                 logger.error("Failed to send startup message to LOG_CHANNEL: %s", e)
 

@@ -60,7 +60,7 @@ async def on_bot_added(client: Client, message):
                 ),
                 InlineKeyboardButton(
                     "📢 Updates",
-                    url="https://t.me/TitanBotUpdates",
+                    url="https://t.me/+svD1FU_ty1Y3MmQ1",
                 ),
             ]]
         )
