@@ -17,6 +17,7 @@ from pyrogram.errors.exceptions.bad_request_400 import (
 
 from bot.config import settings
 from bot.utils.helpers import extract_user, get_file_id, last_online
+from bot.utils.cache import RuntimeCache
 from bot.utils.messages import Texts
 from bot.services.imdb_service import get_poster
 
@@ -177,21 +178,47 @@ async def imdb_callback_handler(client: Client, callback: CallbackQuery):
     await callback.answer()
 
 
-@Client.on_callback_query(filters.regex("^(help|about)$"))
+@Client.on_callback_query(filters.regex("^(help|about|cat_.*)$"))
 async def help_about_callback_handler(client: Client, callback: CallbackQuery):
     """Handle Help and About callback buttons."""
     data = callback.data
     
+    # initial menu or category selection
     if data == "help":
         text = Texts.HELP_TXT
         parse_mode = enums.ParseMode.MARKDOWN
-    else:  # about
+        buttons = [
+            [InlineKeyboardButton("🔍 Search / IMDb", callback_data="cat_search")],
+            [
+                InlineKeyboardButton("🎛 Filters", callback_data="cat_filters"),
+                InlineKeyboardButton("🔗 Connections", callback_data="cat_connections"),
+            ],
+            [InlineKeyboardButton("🔐 Admin", callback_data="cat_admin")],
+            [InlineKeyboardButton("🔐 Close", callback_data="close_data")],
+        ]
+    elif data == "about":  # about
         text = Texts.ABOUT_TXT.format(
             client.me.first_name if client.me else "Bot"
         )
         parse_mode = enums.ParseMode.HTML
+        buttons = [[InlineKeyboardButton("🔐 Close", callback_data="close_data")]]
+    elif data.startswith("cat_"):
+        cat = data.split("_", 1)[1]
+        if cat == "admin":
+            text = Texts.ADMIN_TXT
+        else:
+            text = getattr(Texts, f"HELP_{cat.upper()}_TXT", None)
+            if not text:
+                text = "No information available for this category."
+            else:
+                # some help strings include a placeholder for the bot username
+                text = text.format(RuntimeCache.bot_username)
+        parse_mode = enums.ParseMode.MARKDOWN
+        buttons = [[InlineKeyboardButton("◀️ Back", callback_data="help")]]
+    else:
+        # should never happen
+        return
     
-    buttons = [[InlineKeyboardButton("🔐 Close", callback_data="close_data")]]
     markup = InlineKeyboardMarkup(buttons)
     
     try:

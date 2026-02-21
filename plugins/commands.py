@@ -46,9 +46,15 @@ async def start_handler(client: Client, message: Message):
             [InlineKeyboardButton("🤖 Updates", url="https://t.me/+lRax6d2QVoJlNmMx")],
             [InlineKeyboardButton("ℹ️ Help", url=f"https://t.me/{RuntimeCache.bot_username}?start=help")]
         ]
+        # create a mention string compatible with markdown (we always send markdown here)
+        if message.from_user:
+            user_mention = f"[{message.from_user.first_name}](tg://user?id={message.from_user.id})"
+        else:
+            user_mention = message.chat.title
+
         await message.reply(
             Texts.START_TXT.format(
-                message.from_user.mention if message.from_user else message.chat.title,
+                user_mention,
                 RuntimeCache.bot_username,
             ),
             reply_markup=InlineKeyboardMarkup(buttons),
@@ -69,6 +75,7 @@ async def start_handler(client: Client, message: Message):
                             members,
                             "Unknown",
                         ),
+                        parse_mode=enums.ParseMode.MARKDOWN,
                     )
                 except (PeerIdInvalid, ValueError) as e:
                     logger.warning("Failed to send log message to LOG_CHANNEL %s: %s", settings.LOG_CHANNEL, e)
@@ -82,9 +89,12 @@ async def start_handler(client: Client, message: Message):
         await db.add_user(message.from_user.id, message.from_user.first_name)
         if settings.LOG_CHANNEL:
             try:
+                # mention as markdown
+                user_mention = f"[{message.from_user.first_name}](tg://user?id={message.from_user.id})"
                 await client.send_message(
                     settings.LOG_CHANNEL,
-                    Texts.LOG_TEXT_P.format(message.from_user.id, message.from_user.mention),
+                    Texts.LOG_TEXT_P.format(message.from_user.id, user_mention),
+                    parse_mode=enums.ParseMode.MARKDOWN,
                 )
             except (PeerIdInvalid, ValueError) as e:
                 logger.warning("Failed to send log message to LOG_CHANNEL %s: %s", settings.LOG_CHANNEL, e)

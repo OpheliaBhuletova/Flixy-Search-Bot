@@ -22,6 +22,35 @@ I can help you search movies, manage filters, connect chats, and more.
 Choose a category below to explore available commands 👇
 """
 
+    # per–category descriptions used by callback handler
+    HELP_SEARCH_TXT = """
+🔍 **Search & IMDb**
+
+• Type any movie name in any chat using inline mode:
+  `@{} <movie name>`
+• Or send `/search <query>` or `/imdb <query>` in private.
+"""
+
+    HELP_FILTERS_TXT = """
+🎛 **Filters**
+
+Manage automatic replies when keywords are detected in connected groups.
+
+• `/filter <keyword>` (reply to a message) — save a filter
+• `/filters` or `/viewfilters` — list active filters
+• `/delete <keyword>` — remove a filter
+"""
+
+    HELP_CONNECTIONS_TXT = """
+🔗 **Connections**
+
+Link your groups to the bot and control them from PM.
+
+• `/connect <group_id>` — connect a group to your account
+• `/disconnect` — unlink the current group
+• `/connections` — show all your linked groups
+"""
+
     ABOUT_TXT = """
 📌 **Bot Information**
 

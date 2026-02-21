@@ -41,7 +41,7 @@ All existing commands and user-facing behavior are preserved, ensuring **full ba
 
 ### User Commands
 - `/start` – Start the bot and see the welcome message
-- `/help` – Get information about how to use the bot
+- `/help` – Get information about how to use the bot (opens an interactive menu with categorized commands)
 - `/search <query>` – Search for files by name
 - `/ping` – Check if the bot is alive
 
