@@ -1,5 +1,6 @@
 import os
 import logging
+import random
 from datetime import datetime
 
 from pyrogram import Client, filters, enums
@@ -178,12 +179,41 @@ async def imdb_callback_handler(client: Client, callback: CallbackQuery):
     await callback.answer()
 
 
-@Client.on_callback_query(filters.regex("^(help|about|cat_.*)$"))
+@Client.on_callback_query(filters.regex("^(help|about|cat_.*|start)$"))
 async def help_about_callback_handler(client: Client, callback: CallbackQuery):
     """Handle Help and About callback buttons."""
     data = callback.data
     
     # initial menu or category selection
+    if data == "start":
+        # return user to the normal start menu (private chat only)
+        # remove the help/about message and resend the start photo + text
+        try:
+            await callback.message.delete()
+        except Exception:
+            pass
+        buttons = [
+            [
+                InlineKeyboardButton("🔍 Search", switch_inline_query_current_chat=""),
+                InlineKeyboardButton("🤖 Updates", url="https://t.me/+VbQUA9MDA7A2ODRl"),
+            ],
+            [
+                InlineKeyboardButton("ℹ️ Help", callback_data="help"),
+                InlineKeyboardButton("😊 About", callback_data="about"),
+            ],
+        ]
+        await callback.message.reply_photo(
+            random.choice(settings.PICS),
+            caption=Texts.START_TXT.format(
+                callback.message.from_user.mention,
+                RuntimeCache.bot_username,
+            ),
+            reply_markup=InlineKeyboardMarkup(buttons),
+            parse_mode=enums.ParseMode.MARKDOWN,
+        )
+        await callback.answer()
+        return
+
     if data == "help":
         text = Texts.HELP_TXT
         parse_mode = enums.ParseMode.MARKDOWN
@@ -206,7 +236,10 @@ async def help_about_callback_handler(client: Client, callback: CallbackQuery):
             client.me.first_name if client.me else "Bot"
         )
         parse_mode = enums.ParseMode.HTML
-        buttons = [[InlineKeyboardButton("❌ Close", callback_data="close_data")]]
+        buttons = [[
+            InlineKeyboardButton("◀️ Back", callback_data="help"),
+            InlineKeyboardButton("❌ Close", callback_data="close_data"),
+        ]]
     elif data.startswith("cat_"):
         cat = data.split("_", 1)[1]
         if cat == "admin":

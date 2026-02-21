@@ -52,15 +52,15 @@ Link your groups to the bot and control them from PM.
 """
 
     ABOUT_TXT = """
-📌 **Bot Information**
+📌 <b>Bot Information</b>
 
-**🤖 Name:** {}  
-**👨‍💻 Developer:** <a href="https://t.me/PopzyBots">Popzy Bots</a>  
-**📚 Framework:** Pyrogram  
-**🐍 Language:** Python 3.11+  
-**🗄 Database:** MongoDB  
-**🌐 Hosting:** Koyeb  
-**🔖 Version:** v1.0 • Modernized  
+<b>🤖 Name:</b> {}  
+<b>👨‍💻 Developer:</b> <a href="https://t.me/PopzyBots">Popzy Bots</a>  
+<b>📚 Framework:</b> Pyrogram  
+<b>🐍 Language:</b> Python 3.11+  
+<b>🗄 Database:</b> MongoDB  
+<b>🌐 Hosting:</b> Koyeb  
+<b>🔖 Version:</b> v1.0 • Modernized  
 
 Built for speed, stability, and smooth movie searching 🚀
 """
