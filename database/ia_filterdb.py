@@ -35,9 +35,13 @@ class Media(Document):
 
     class Meta:
         collection_name = settings.COLLECTION_NAME
+        # MongoDB allows only one text index per collection. Use a compound
+        # text index covering both file_name and caption fields. The
+        # 'sparse' option cannot be applied to individual fields inside a
+        # compound text index, so the caption document may be empty in some
+        # records but that's fine for search.
         indexes = [
-            {"key": [("file_name", "text")]},
-            {"key": [("caption", "text")], "sparse": True},
+            {"key": [("file_name", "text"), ("caption", "text")]},
             "file_type",
         ]
 

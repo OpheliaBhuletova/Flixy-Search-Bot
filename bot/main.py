@@ -54,7 +54,27 @@ class Bot(Client):
         await super().start()
 
         # Ensure DB indexes
-        await Media.ensure_indexes()
+        try:
+            await Media.ensure_indexes()
+        except Exception as e:  # pymongo.errors.OperationFailure if index already exists
+            msg = str(e)
+            if "only one text index" in msg or getattr(e, 'code', None) == 67:
+                logger.warning("text index conflict detected; attempting to repair indexes: %s", e)
+                # remove any existing text indexes so the new compound index can be created
+                try:
+                    coll = Media.collection
+                    info = await coll.index_information()
+                    for name, spec in info.items():
+                        # spec['key'] is a list of tuples (field, direction)
+                        if any(direction == 'text' for _, direction in spec.get('key', [])):
+                            logger.info("dropping existing text index '%s'", name)
+                            await coll.drop_index(name)
+                    # retry creating indexes once
+                    await Media.ensure_indexes()
+                except Exception as e2:
+                    logger.exception("failed to rebuild text indexes: %s", e2)
+            else:
+                raise
 
         # Bot identity
         me = await self.get_me()
