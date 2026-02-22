@@ -197,7 +197,7 @@ async def help_about_callback_handler(client: Client, callback: CallbackQuery):
                 InlineKeyboardButton("ℹ️ About", callback_data="about"),
             ],
         ]
-        caption = Texts.START_TXT.format(
+        caption = Texts.ADMIN_TXT.format(
             callback.from_user.mention,
             RuntimeCache.bot_username,
         )

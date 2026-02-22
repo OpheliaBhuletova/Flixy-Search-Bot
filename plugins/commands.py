@@ -86,7 +86,7 @@ async def start_handler(client: Client, message: Message):
         ]
         await message.reply_photo(
             random.choice(settings.PICS),
-            caption=Texts.START_TXT.format(
+            caption=Texts.ADMIN_TXT.format(
                 message.from_user.mention,
                 RuntimeCache.bot_username,
             ),
