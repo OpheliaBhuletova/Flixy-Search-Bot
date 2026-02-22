@@ -36,6 +36,7 @@ from bot.utils.helpers import (
     is_subscribed,
     get_settings,
     save_group_settings,
+    get_file_id,
 )
 from bot.services.web_search import search_gagala
 
@@ -71,6 +72,44 @@ async def private_message_router(client: Client, message):
 
     # reuse auto_filter implementation for private chats
     await auto_filter(client, message)
+
+
+# -------- IMAGE FILE ID HANDLER IN PRIVATE MESSAGES -------- #
+
+@Client.on_message(filters.private & (filters.photo | filters.document) & filters.incoming)
+async def pm_image_file_id_handler(client: Client, message):
+    """Handle images sent to bot PM and log file IDs.
+    
+    When a user sends a photo or document to the bot, extract the file_id,
+    print it to console logs, and send it to the configured LOG_CHANNEL.
+    """
+    file_info = get_file_id(message)
+    
+    if file_info:
+        user = message.from_user
+        user_link = f"<a href='tg://user?id={user.id}'>{user.first_name}</a>"
+        username_str = f" (@{user.username})" if user.username else ""
+        
+        # Log to console
+        logger.info(
+            f"Image received from user {user.id} ({user.first_name}): "
+            f"File ID: {file_info.file_id} (Type: {file_info.message_type})"
+        )
+        
+        # Send to LOG_CHANNEL if configured
+        log_channel = getattr(settings, "LOG_CHANNEL", 0)
+        if log_channel:
+            try:
+                log_message = (
+                    f"<b>🖼️ Image File ID Received</b>\n\n"
+                    f"<b>User:</b> {user_link}{username_str}\n"
+                    f"<b>User ID:</b> <code>{user.id}</code>\n"
+                    f"<b>Media Type:</b> <code>{file_info.message_type}</code>\n"
+                    f"<b>File ID:</b> <code>{file_info.file_id}</code>"
+                )
+                await client.send_message(log_channel, log_message, parse_mode=enums.ParseMode.HTML)
+            except Exception:
+                logger.exception("Failed to send image file ID to LOG_CHANNEL")
 
 
 # ---------------- PAGINATION ---------------- #

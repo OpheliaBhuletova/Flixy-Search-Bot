@@ -280,11 +280,20 @@ async def list_chats_handler(client: Client, message):
         text = "Channels:\n\n"
         for ch in items:
             try:
-                chat = await client.get_chat(ch)
-                # Try title first, then username, then fallback to ID
-                title = chat.title or chat.username or str(ch)
+                # Convert to int if it's a string
+                ch_id = int(ch) if isinstance(ch, str) else ch
+                chat = await client.get_chat(ch_id)
+                # Use title as the primary source, with fallbacks
+                if chat.title:
+                    title = chat.title
+                elif chat.username:
+                    title = f"@{chat.username}"
+                else:
+                    title = f"Channel {ch_id}"
                 cid = chat.id
-            except Exception:
+            except Exception as e:
+                logger = logging.getLogger(__name__)
+                logger.warning(f"Failed to get chat info for {ch}: {e}")
                 title = str(ch)
                 cid = ch
             text += f"Title: {title} | ID: {cid}\n"
