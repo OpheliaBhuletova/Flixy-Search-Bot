@@ -4,6 +4,7 @@ import datetime
 
 from pyrogram import Client, filters
 from pyrogram.types import Message
+from pyrogram.enums import ParseMode
 
 from database.users_chats_db import db
 from bot.config import settings
@@ -100,7 +101,7 @@ async def broadcast_handler(client: Client, message: Message):
             failed=failed,
             duration_seconds=0,
         ),
-        parse_mode="HTML",
+        parse_mode=ParseMode.HTML,
         disable_web_page_preview=True,
     )
 
@@ -134,7 +135,7 @@ async def broadcast_handler(client: Client, message: Message):
                     failed=failed,
                     duration_seconds=elapsed,
                 ),
-                parse_mode="HTML",
+                parse_mode=ParseMode.HTML,
                 disable_web_page_preview=True,
             )
 
@@ -151,6 +152,6 @@ async def broadcast_handler(client: Client, message: Message):
             failed=failed,
             duration_seconds=elapsed,
         ),
-        parse_mode="HTML",
+        parse_mode=ParseMode.HTML,
         disable_web_page_preview=True,
     )
