@@ -127,10 +127,21 @@ class Bot(Client):
         )
         logger.info(LOG_STR)
 
-        # Note: Startup message to LOG_CHANNEL is disabled for private channels
+        # Attempt to send a startup message to the configured logs channel
+        if getattr(settings, "LOG_CHANNEL", 0):
+            try:
+                await self.send_message(
+                    settings.LOG_CHANNEL,
+                    f"Bot started: {self.username}\n\n{LOG_STR}",
+                    parse_mode=enums.ParseMode.HTML,
+                )
+            except Exception:
+                logger.exception("Failed to send startup message to LOG_CHANNEL")
+
+        # Note: Startup message to LOG_CHANNEL may fail for private channels
         # due to Pyrogram peer cache limitations with bots on private channels.
-        # Once the channel receives any message from the bot (e.g., from user logs),
-        # subsequent messages will work normally.
+        # Once the channel receives any message from the bot, subsequent
+        # messages will work normally.
 
         # Block forever so Koyeb does not scale down
         await asyncio.Event().wait()
