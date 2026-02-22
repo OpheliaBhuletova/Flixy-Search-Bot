@@ -3,42 +3,32 @@ import logging
 import logging.config
 import os
 from datetime import datetime
-from typing import Union, Optional, AsyncGenerator
+from typing import AsyncGenerator, Optional, Union
 
-from pyrogram import Client, __version__, idle, enums
-from pyrogram.raw.all import layer
-from pyrogram import types
-from pyrogram.errors import FloodWait
-from pyrogram.raw import functions, types
-
+import aiohttp
 from aiohttp import web
+from pyrogram import Client, __version__, idle, types
+from pyrogram.errors import FloodWait
 
-from bot.config import settings, LOG_STR
-from database.users_chats_db import get_db_instance
-from database.ia_filterdb import Media
+from bot.config import LOG_STR, settings
 from bot.utils.cache import RuntimeCache
+from database.ia_filterdb import Media
+from database.users_chats_db import get_db_instance
 from plugins import web_server
 
 
 # ─── Logging setup ────────────────────────────────────────────────────
 os.makedirs("logs", exist_ok=True)
-logging.config.fileConfig(
-    "bot/logging.conf",
-    disable_existing_loggers=False
-)
+logging.config.fileConfig("bot/logging.conf", disable_existing_loggers=False)
 
 logger = logging.getLogger(__name__)
 logging.getLogger("pyrogram").setLevel(logging.ERROR)
 logging.getLogger("imdbpy").setLevel(logging.ERROR)
 
-
 PORT = int(os.getenv("PORT", 8080))
 
-from pyrogram.raw import functions, types
 
-import aiohttp
-from pyrogram.errors import RPCError
-
+# ─── Startup log helper (Pyrogram -> Bot API fallback) ────────────────
 async def botapi_send_message(token: str, chat_id: int, text: str) -> None:
     url = f"https://api.telegram.org/bot{token}/sendMessage"
     payload = {
@@ -53,18 +43,23 @@ async def botapi_send_message(token: str, chat_id: int, text: str) -> None:
             if not data.get("ok"):
                 raise RuntimeError(data)
 
-async def send_startup_log(app, chat_id: int, text: str) -> None:
-    # 1) Try Pyrogram first (works for most normal IDs)
+
+async def send_startup_log(app: Client, chat_id: int, text: str) -> None:
+    # Try Pyrogram first; fall back to Bot API for "Peer id invalid" issue.
     try:
-        await app.send_message(chat_id, text, parse_mode=enums.ParseMode.HTML, disable_web_page_preview=True)
+        await app.send_message(
+            chat_id,
+            text,
+            parse_mode="HTML",
+            disable_web_page_preview=True,
+        )
         return
     except Exception as e:
-        # If it's the peer-id validation issue, fall back
         if "Peer id invalid" not in str(e):
             raise
 
-    # 2) Fallback: Bot API (bypasses Pyrogram peer-id validation)
     await botapi_send_message(app.bot_token, chat_id, text)
+
 
 class Bot(Client):
     def __init__(self):
@@ -79,65 +74,51 @@ class Bot(Client):
         )
 
     async def start(self):
-        # Load banned users/chats
+        # Load banned users/chats + ensure indexes
         db = get_db_instance()
-        # Ensure DB indexes for users/chats are created on the running loop
         try:
             await db.ensure_indexes()
         except Exception:
             logger.exception("Failed to ensure users/chats indexes")
-        banned_users, banned_chats = await db.get_banned()
-        RuntimeCache.banned_users = banned_users
-        RuntimeCache.banned_chats = banned_chats
 
-        # start the web server early so health checks stay happy even if
-        # bot authorization is delayed by a FloodWait
+        RuntimeCache.banned_users, RuntimeCache.banned_chats = await db.get_banned()
+
+        # Web server for health checks
         web_app = await web_server()
         runner = web.AppRunner(web_app)
         await runner.setup()
         site = web.TCPSite(runner, "0.0.0.0", PORT)
         await site.start()
 
-        # start Pyrogram client and handle authorization flood waits
+        # Start Pyrogram with FloodWait handling
         while True:
             try:
                 await super().start()
                 break
-            except FloodWait as fw:  # Telegram rate limit
-                wait = getattr(fw, 'x', None) or getattr(fw, 'value', None) or getattr(fw, 'seconds', None)
-                if wait is None:
-                    wait = fw.args[0] if fw.args else None
-                logger.warning(
-                    "FloodWait on bot authorization (%s seconds), sleeping before retry",
-                    wait,
-                )
+            except FloodWait as fw:
+                wait = getattr(fw, "value", None) or getattr(fw, "x", None) or getattr(fw, "seconds", None)
+                wait = wait or (fw.args[0] if fw.args else None)
+                logger.warning("FloodWait on bot authorization (%s seconds), sleeping before retry", wait)
                 if wait:
                     await asyncio.sleep(wait)
-                # loop and try again
 
-        # Ensure DB indexes
+        # Ensure DB indexes for media
         try:
             await Media.ensure_indexes()
-        except Exception as e:  # pymongo.errors.OperationFailure if index already exists
+        except Exception as e:
             msg = str(e)
-            # handle both "only one text index" (code 67) and
-            # "equivalent index exists with different name/options" (code 85)
-            if ("only one text index" in msg
-                    or getattr(e, 'code', None) in (67, 85)):
+            if ("only one text index" in msg) or (getattr(e, "code", None) in (67, 85)):
                 logger.warning("text index conflict detected; attempting to repair indexes: %s", e)
-                # remove any existing text indexes so the new compound index can be created
                 try:
                     coll = Media.collection
                     info = await coll.index_information()
                     for name, spec in info.items():
-                        # spec['key'] is a list of tuples (field, direction)
-                        if any(direction == 'text' for _, direction in spec.get('key', [])):
+                        if any(direction == "text" for _, direction in spec.get("key", [])):
                             logger.info("dropping existing text index '%s'", name)
                             await coll.drop_index(name)
-                    # retry creating indexes once
                     await Media.ensure_indexes()
-                except Exception as e2:
-                    logger.exception("failed to rebuild text indexes: %s", e2)
+                except Exception:
+                    logger.exception("failed to rebuild text indexes")
             else:
                 raise
 
@@ -150,32 +131,20 @@ class Bot(Client):
 
         self.username = f"@{me.username}"
 
-        logger.info(
-            "%s started with Pyrogram v%s (Layer %s) as %s",
-            me.first_name,
-            __version__,
-            layer,
-            self.username,
-        )
+        logger.info("%s started with Pyrogram v%s as %s", me.first_name, __version__, self.username)
         logger.info(LOG_STR)
 
-        # Attempt to send a startup message to the configured logs channel
+        # Startup log
         log_channel = getattr(settings, "LOG_CHANNEL", 0)
-        logger.info("LOG_CHANNEL raw=%r type=%s", settings.LOG_CHANNEL, type(settings.LOG_CHANNEL))
-        if settings.LOG_CHANNEL:
+        if log_channel:
             try:
                 await send_startup_log(
                     self,
-                    int(settings.LOG_CHANNEL),
-                    f"<b>✅ Bot started</b>: {self.username}\n\n<pre>{LOG_STR}</pre>",
+                    int(log_channel),
+                    f"<b>✅ Bot started</b>: {self.username}\n\n<blockquote>{LOG_STR}</blockquote>",
                 )
             except Exception:
                 logger.exception("Failed to send startup message to LOG_CHANNEL")
-
-        # Note: Startup message to LOG_CHANNEL may fail for private channels
-        # due to Pyrogram peer cache limitations with bots on private channels.
-        # Once the channel receives any message from the bot, subsequent
-        # messages will work normally.
 
         # Block forever so Koyeb does not scale down
         await asyncio.Event().wait()
@@ -200,10 +169,7 @@ class Bot(Client):
             diff = min(200, limit - current)
             if diff <= 0:
                 return
-            messages = await self.get_messages(
-                chat_id,
-                list(range(current, current + diff + 1))
-            )
+            messages = await self.get_messages(chat_id, list(range(current, current + diff + 1)))
             for message in messages:
                 yield message
                 current += 1
