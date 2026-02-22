@@ -137,8 +137,24 @@ async def start_handler(client: Client, message: Message):
 
         if not await db.get_chat(message.chat.id):
             members = await client.get_chat_members_count(message.chat.id)
-            # LOG_CHANNEL feature removed: do not send startup/registration messages to the logs channel
+            
+            # Log to database
             await db.add_chat(message.chat.id, message.chat.title)
+            
+            # Log to LOG_CHANNEL
+            log_channel = getattr(settings, "LOG_CHANNEL", 0)
+            if log_channel:
+                try:
+                    user_link = f"<a href='tg://user?id={message.from_user.id}'>{message.from_user.first_name}</a>" if message.from_user else "Anonymous"
+                    log_msg = (
+                        f"🆕 <b>New Group Connected</b>\n\n"
+                        f"<b>Group:</b> {message.chat.title} (<code>{message.chat.id}</code>)\n"
+                        f"<b>Members:</b> <code>{members}</code>\n"
+                        f"<b>Added By:</b> {user_link}"
+                    )
+                    await client.send_message(log_channel, log_msg, parse_mode=enums.ParseMode.HTML)
+                except Exception:
+                    logger.exception("Failed to send new group notification to LOG_CHANNEL")
         return
 
     # ── PRIVATE START ──

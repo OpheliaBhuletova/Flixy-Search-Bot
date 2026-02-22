@@ -27,8 +27,23 @@ async def on_bot_added(client: Client, message):
         if not await db.get_chat(message.chat.id):
             total = await client.get_chat_members_count(message.chat.id)
             added_by = message.from_user.mention if message.from_user else "Anonymous"
-            # LOG_CHANNEL feature removed: do not send bot-added notifications to logs channel
+            
+            # Log to database
             await db.add_chat(message.chat.id, message.chat.title)
+            
+            # Log to LOG_CHANNEL
+            log_channel = getattr(settings, "LOG_CHANNEL", 0)
+            if log_channel:
+                try:
+                    log_msg = (
+                        f"🆕 <b>New Group Connected</b>\n\n"
+                        f"<b>Group:</b> {message.chat.title} (<code>{message.chat.id}</code>)\n"
+                        f"<b>Members:</b> <code>{total}</code>\n"
+                        f"<b>Added By:</b> {added_by}"
+                    )
+                    await client.send_message(log_channel, log_msg, parse_mode=enums.ParseMode.HTML)
+                except Exception:
+                    logger.exception("Failed to send new group notification to LOG_CHANNEL")
 
         if message.chat.id in RuntimeCache.banned_chats:
             markup = InlineKeyboardMarkup(
@@ -92,12 +107,32 @@ async def leave_chat_handler(client: Client, message):
     markup = InlineKeyboardMarkup(
         [[InlineKeyboardButton("Support", url=f"https://t.me/{settings.SUPPORT_CHAT}")]]
     )
-    await client.send_message(
-        chat,
-        "<b>My admin asked me to leave this group.</b>",
-        reply_markup=markup,
-    )
+    
+    try:
+        await client.send_message(
+            chat,
+            "<b>My admin asked me to leave this group.</b>",
+            reply_markup=markup,
+        )
+    except Exception:
+        pass
+    
     await client.leave_chat(chat)
+    
+    # Log to LOG_CHANNEL
+    log_channel = getattr(settings, "LOG_CHANNEL", 0)
+    if log_channel:
+        try:
+            user_link = f"<a href='tg://user?id={message.from_user.id}'>{message.from_user.first_name}</a>"
+            log_msg = (
+                f"👋 <b>Group Disconnected (Leave)</b>\n\n"
+                f"<b>Chat ID:</b> <code>{chat}</code>\n"
+                f"<b>Command By:</b> {user_link}"
+            )
+            await client.send_message(log_channel, log_msg, parse_mode=enums.ParseMode.HTML)
+        except Exception:
+            logger.exception("Failed to send group leave notification to LOG_CHANNEL")
+    
     await message.reply(f"Left chat `{chat}`")
 
 
@@ -124,12 +159,33 @@ async def disable_chat_handler(client: Client, message):
     markup = InlineKeyboardMarkup(
         [[InlineKeyboardButton("Support", url=f"https://t.me/{settings.SUPPORT_CHAT}")]]
     )
-    await client.send_message(
-        chat,
-        f"<b>This chat has been disabled.</b>\nReason: <code>{reason}</code>",
-        reply_markup=markup,
-    )
+    
+    try:
+        await client.send_message(
+            chat,
+            f"<b>This chat has been disabled.</b>\nReason: <code>{reason}</code>",
+            reply_markup=markup,
+        )
+    except Exception:
+        pass
+    
     await client.leave_chat(chat)
+    
+    # Log to LOG_CHANNEL
+    log_channel = getattr(settings, "LOG_CHANNEL", 0)
+    if log_channel:
+        try:
+            user_link = f"<a href='tg://user?id={message.from_user.id}'>{message.from_user.first_name}</a>"
+            log_msg = (
+                f"⛔ <b>Group Disconnected (Disabled)</b>\n\n"
+                f"<b>Chat ID:</b> <code>{chat}</code>\n"
+                f"<b>Reason:</b> <code>{reason}</code>\n"
+                f"<b>Disabled By:</b> {user_link}"
+            )
+            await client.send_message(log_channel, log_msg, parse_mode=enums.ParseMode.HTML)
+        except Exception:
+            logger.exception("Failed to send group disable notification to LOG_CHANNEL")
+    
     await message.reply("Chat successfully disabled")
 
 
