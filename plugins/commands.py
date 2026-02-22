@@ -51,8 +51,6 @@ async def set_startup_image(client: Client, message: Message):
         await message.reply("❌ This command is restricted to administrators only.")
         return
     
-    logger.info(f"DEBUG: /setstartup handler triggered for admin {message.from_user.id}")
-    
     # Get the image to process
     image_message = None
     
@@ -62,7 +60,6 @@ async def set_startup_image(client: Client, message: Message):
         image_message = message
     
     if not image_message:
-        logger.info("DEBUG: No image message found")
         await message.reply("❌ Please reply to an image or send an image with this command.")
         return
     
@@ -70,7 +67,6 @@ async def set_startup_image(client: Client, message: Message):
     file_info = get_file_id(image_message)
     
     if not file_info:
-        logger.info("DEBUG: Could not extract file_id")
         await message.reply("❌ Could not extract file_id from the image.")
         return
     
@@ -177,15 +173,22 @@ async def start_handler(client: Client, message: Message):
         ]
         
         # Get startup images from database and settings
-        startup_images = list(settings.PICS)
+        startup_images = []
         try:
             db_images = await db.get_startup_images()
-            startup_images.extend(db_images)
+            if db_images:
+                startup_images = db_images
+                logger.info(f"Using {len(db_images)} startup images from database")
+            else:
+                startup_images = list(settings.PICS)
+                logger.info("No database images found, using default PICS")
         except Exception:
-            logger.exception("Failed to get startup images from database")
+            logger.exception("Failed to get startup images from database, using defaults")
+            startup_images = list(settings.PICS)
         
         # Use a random image from available options
         pic_to_use = random.choice(startup_images) if startup_images else settings.PICS[0]
+        logger.info(f"Selected startup image: {pic_to_use[:50]}...")
         
         await message.reply_photo(
             pic_to_use,
