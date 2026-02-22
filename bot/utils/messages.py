@@ -23,6 +23,7 @@ Sit back, relax, and enjoy unlimited entertainment 🍿✨
 I can help you search movies, manage filters, connect chats, and more.  
 Choose a category below to explore available commands 👇
  • `/channels` — list connected channels  
+"""
 
     # per–category descriptions used by callback handler
     HELP_SEARCH_TXT = """
