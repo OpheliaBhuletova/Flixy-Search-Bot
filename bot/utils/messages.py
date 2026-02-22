@@ -1,3 +1,5 @@
+# -*- coding: utf-8 -*-
+
 class Texts:
     """
     Centralized user-facing text messages for Flixy Search Bot.
