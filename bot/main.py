@@ -184,3 +184,20 @@ async def main():
 
 if __name__ == "__main__":
     asyncio.run(main())
+
+
+#def build_log_string(ping: int = 0, boot_time: float = 0.0) -> str:
+#    return f"""
+#<b>🚀 Flixy Search Bot Online</b>
+#
+#<pre>
+#IMDB:        {"Enabled ✓" if settings.IMDB else "Disabled ✗"}
+#SpellCheck:  {"Enabled ✓" if settings.SPELL_CHECK_REPLY else "Disabled ✗"}
+#Max Results: {settings.MAX_LIST_ELM if settings.MAX_LIST_ELM else "Default"}
+#</pre>
+#
+#⚡ Ping: <b>{ping} ms</b>
+#⏱ Boot: <b>{round(boot_time, 2)}s</b>
+#
+#Ready.
+#"""
