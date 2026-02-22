@@ -128,15 +128,25 @@ class Bot(Client):
         logger.info(LOG_STR)
 
         # Attempt to send a startup message to the configured logs channel
-        if getattr(settings, "LOG_CHANNEL", 0):
+        log_channel = getattr(settings, "LOG_CHANNEL", 0)
+
+        if log_channel:
             try:
+                # env vars often come as strings -> force int when numeric
+                if isinstance(log_channel, str) and log_channel.lstrip("-").isdigit():
+                    log_channel = int(log_channel)
+
+                # Force resolve (gives clearer errors if bot isn't in chat)
+                await self.get_chat(log_channel)
+
                 await self.send_message(
-                    settings.LOG_CHANNEL,
-                    f"Bot started: {self.username}\n\n{LOG_STR}",
+                    log_channel,
+                    f"<b>✅ Bot started</b>: {self.username}\n\n<pre>{LOG_STR}</pre>",
                     parse_mode=enums.ParseMode.HTML,
+                    disable_web_page_preview=True,
                 )
             except Exception:
-                logger.exception("Failed to send startup message to LOG_CHANNEL")
+                logger.exception(f"Failed to send startup message to LOG_CHANNEL={log_channel!r}")
 
         # Note: Startup message to LOG_CHANNEL may fail for private channels
         # due to Pyrogram peer cache limitations with bots on private channels.
