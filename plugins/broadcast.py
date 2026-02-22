@@ -60,14 +60,14 @@ def _build_report_html(
 
     # Telegram HTML: keep it simple (b, i, pre, code, blockquote, br, a)
     return (
-        f"<b>{title}</b>\n"
-        f"{status_emoji} <i>Status:</i> <b>{percent}%</b> — {status_text}\n\n"
-        f"<pre>{bar} {percent}%</pre>\n"
-        f"<b>Summary</b>\n"
+        f"<b>{title}</b>\n\n"
+        f"{status_emoji} Status: <b>{percent}%</b> — {status_text}\n\n"
+        f"<code>{bar} {percent}%</code>\n"
+        f"<b>Summary:</b>\n"
         f"👥 Users Reached: <b>{total}</b>\n"
         f"✅ Completed: <b>{done}</b>/<b>{total}</b>"
         f"{duration_line}\n\n"
-        f"<b>Delivery</b>\n"
+        f"<b>Delivery:</b>\n"
         f"✔ Delivered: <b>{success}</b>\n"
         f"🚫 Blocked: <b>{blocked}</b>\n"
         f"🗑 Deleted: <b>{deleted}</b>\n"
