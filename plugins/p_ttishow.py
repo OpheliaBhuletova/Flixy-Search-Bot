@@ -10,7 +10,7 @@ from bot.config import settings
 from database.users_chats_db import db
 from database.ia_filterdb import Media
 from bot.utils.cache import RuntimeCache
-from bot.utils.helpers import get_size, get_settings
+from bot.utils.helpers import get_size, get_settings, schedule_delete_message
 from bot.utils.messages import Texts as Text
 
 
@@ -213,7 +213,9 @@ async def list_users_handler(client: Client, message):
     except MessageTooLong:
         with open("users.txt", "w") as f:
             f.write(text)
-        await message.reply_document("users.txt")
+        sent = await message.reply_document("users.txt")
+        if message.chat.type == enums.ChatType.PRIVATE:
+            schedule_delete_message(client, sent.chat.id, sent.id)
 
 
 @Client.on_message(filters.command("chats") & filters.user(settings.ADMINS))
@@ -233,4 +235,6 @@ async def list_chats_handler(client: Client, message):
     except MessageTooLong:
         with open("chats.txt", "w") as f:
             f.write(text)
-        await message.reply_document("chats.txt")
+        sent = await message.reply_document("chats.txt")
+        if message.chat.type == enums.ChatType.PRIVATE:
+            schedule_delete_message(client, sent.chat.id, sent.id)

@@ -18,7 +18,8 @@ async def broadcast_messages(user_id: int, message: Message):
         return True, "Success"
 
     except FloodWait as e:
-        await asyncio.sleep(e.value)
+        sleep_time = getattr(e, "x", None) or getattr(e, "value", None) or 0
+        await asyncio.sleep(sleep_time)
         return await broadcast_messages(user_id, message)
 
     except InputUserDeactivated:

@@ -237,10 +237,11 @@ async def auto_filter(client: Client, message, spoll=None):
         ])
 
     imdb = await get_poster(search) if settings_data["imdb"] else None
+    # Default caption for non-IMDB results: use HTML with a deletion note
     caption = (
         settings_data["template"].format(**imdb, query=search)
         if imdb
-        else f"Results for **{search}**"
+        else f"Results for <b>{search}</b>\n\n<i>(Note: Files will be automatically deleted after 6hrs)</i>"
     )
 
     if imdb and imdb.get("poster"):
@@ -249,9 +250,24 @@ async def auto_filter(client: Client, message, spoll=None):
                 imdb["poster"], caption[:1024], reply_markup=InlineKeyboardMarkup(buttons)
             )
         except (MediaEmpty, PhotoInvalidDimensions, WebpageMediaEmpty):
-            await message.reply_text(caption, reply_markup=InlineKeyboardMarkup(buttons))
+            if not imdb:
+                await message.reply_text(
+                    caption,
+                    reply_markup=InlineKeyboardMarkup(buttons),
+                    parse_mode=enums.ParseMode.HTML,
+                )
+            else:
+                await message.reply_text(caption, reply_markup=InlineKeyboardMarkup(buttons))
     else:
-        await message.reply_text(caption, reply_markup=InlineKeyboardMarkup(buttons))
+        # When no IMDb/template is used, caption contains HTML and should be sent as HTML
+        if not imdb:
+            await message.reply_text(
+                caption,
+                reply_markup=InlineKeyboardMarkup(buttons),
+                parse_mode=enums.ParseMode.HTML,
+            )
+        else:
+            await message.reply_text(caption, reply_markup=InlineKeyboardMarkup(buttons))
 
 
 # ---------------- SPELL CHECK ---------------- #

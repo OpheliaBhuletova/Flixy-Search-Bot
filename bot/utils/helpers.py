@@ -98,3 +98,29 @@ async def get_settings(chat_id: int):
 async def save_group_settings(chat_id: int, settings: dict):
     db = get_db_instance()
     await db.update_settings(chat_id, settings)
+
+
+import asyncio
+import logging
+
+logger = logging.getLogger(__name__)
+
+
+def schedule_delete_message(client, chat_id: int, message_id: int, delay_seconds: int = 6 * 3600):
+    """Schedule deletion of a message after delay_seconds in background.
+
+    Non-blocking: creates an asyncio task to sleep then delete the message.
+    """
+
+    async def _del():
+        try:
+            await asyncio.sleep(delay_seconds)
+            await client.delete_messages(chat_id, message_id)
+        except Exception as e:
+            logger.debug("Could not auto-delete message %s in %s: %s", message_id, chat_id, e)
+
+    try:
+        asyncio.create_task(_del())
+    except RuntimeError:
+        # If there's no running loop, just ignore scheduling
+        logger.debug("Event loop not running; cannot schedule deletion for %s", message_id)

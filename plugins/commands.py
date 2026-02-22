@@ -44,7 +44,7 @@ async def start_handler(client: Client, message: Message):
     if message.chat.type in {enums.ChatType.GROUP, enums.ChatType.SUPERGROUP}:
         buttons = [
             [InlineKeyboardButton("🤖 Updates", url="https://t.me/+svD1FU_ty1Y3MmQ1")],
-            [InlineKeyboardButton("ℹ️ Help", url=f"https://t.me/{RuntimeCache.bot_username}?start=help")]
+            [InlineKeyboardButton("❓Help", url=f"https://t.me/{RuntimeCache.bot_username}?start=help")]
         ]
         # create a mention string compatible with markdown (we always send markdown here)
         if message.from_user:
@@ -80,8 +80,8 @@ async def start_handler(client: Client, message: Message):
                 InlineKeyboardButton("🤖 Updates", url="https://t.me/+svD1FU_ty1Y3MmQ1")
             ],
             [
-                InlineKeyboardButton("ℹ️ Help", callback_data="help"),
-                InlineKeyboardButton("😊 About", callback_data="about")
+                InlineKeyboardButton("❓Help", callback_data="help"),
+                InlineKeyboardButton("ℹ️ About", callback_data="about")
             ]
         ]
         await message.reply_photo(

@@ -193,8 +193,8 @@ async def help_about_callback_handler(client: Client, callback: CallbackQuery):
                 InlineKeyboardButton("🤖 Updates", url="https://t.me/+svD1FU_ty1Y3MmQ1"),
             ],
             [
-                InlineKeyboardButton("ℹ️ Help", callback_data="help"),
-                InlineKeyboardButton("😊 About", callback_data="about"),
+                InlineKeyboardButton("❓Help", callback_data="help"),
+                InlineKeyboardButton("ℹ️ About", callback_data="about"),
             ],
         ]
         caption = Texts.START_TXT.format(

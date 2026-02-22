@@ -11,7 +11,7 @@ from database.filters_mdb import (
     count_filters,
 )
 from database.connections_mdb import active_connection
-from bot.utils.helpers import get_file_id
+from bot.utils.helpers import get_file_id, schedule_delete_message
 from bot.utils.text_parser import parser, split_quotes
 
 
@@ -140,7 +140,9 @@ async def list_filters_handler(client: Client, message: Message):
     if len(text) > 4096:
         with io.BytesIO(text.replace("`", "").encode()) as f:
             f.name = "filters.txt"
-            await message.reply_document(f, quote=True)
+            sent = await message.reply_document(f, quote=True)
+            if message.chat.type == enums.ChatType.PRIVATE:
+                schedule_delete_message(client, sent.chat.id, sent.id)
     else:
         await message.reply_text(
             text, quote=True, parse_mode=enums.ParseMode.MARKDOWN
