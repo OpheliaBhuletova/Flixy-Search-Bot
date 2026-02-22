@@ -32,7 +32,7 @@ class Settings(BaseSettings):
     CACHE_TIME: int = 300
     USE_CAPTION_FILTER: bool = False
     PICS: List[str] = [
-        "https://te.legra.ph/file/84fcfcb9eaa399d702434.jpg"
+        "https://deposit.pictures/p/af9537d6b6b64bbc8f6a41d5edd37ed5"
     ]
 
     # ─── Admins, Channels & Users ──────────────────────────────────────
