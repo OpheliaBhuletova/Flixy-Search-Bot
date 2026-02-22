@@ -36,27 +36,35 @@ PORT = int(os.getenv("PORT", 8080))
 
 from pyrogram.raw import functions, types
 
-async def send_to_channel_raw(app, chat_id: int, text: str):
-    # This returns InputPeerChannel / InputPeerChat / InputPeerUser as needed
-    peer = await app.resolve_peer(chat_id)
+import aiohttp
+from pyrogram.errors import RPCError
 
+async def botapi_send_message(token: str, chat_id: int, text: str) -> None:
+    url = f"https://api.telegram.org/bot{token}/sendMessage"
+    payload = {
+        "chat_id": chat_id,
+        "text": text,
+        "parse_mode": "HTML",
+        "disable_web_page_preview": True,
+    }
+    async with aiohttp.ClientSession() as session:
+        async with session.post(url, data=payload) as resp:
+            data = await resp.json()
+            if not data.get("ok"):
+                raise RuntimeError(data)
+
+async def send_startup_log(app, chat_id: int, text: str) -> None:
+    # 1) Try Pyrogram first (works for most normal IDs)
     try:
-        await app.invoke(
-            functions.messages.SendMessage(
-                peer=peer,
-                message=text,
-                random_id=app.rnd_id()
-            )
-        )
-    except FloodWait as e:
-        await asyncio.sleep(e.value)
-        await app.invoke(
-            functions.messages.SendMessage(
-                peer=peer,
-                message=text,
-                random_id=app.rnd_id()
-            )
-        )
+        await app.send_message(chat_id, text, parse_mode=enums.ParseMode.HTML, disable_web_page_preview=True)
+        return
+    except Exception as e:
+        # If it's the peer-id validation issue, fall back
+        if "Peer id invalid" not in str(e):
+            raise
+
+    # 2) Fallback: Bot API (bypasses Pyrogram peer-id validation)
+    await botapi_send_message(app.bot_token, chat_id, text)
 
 class Bot(Client):
     def __init__(self):
@@ -156,13 +164,13 @@ class Bot(Client):
         logger.info("LOG_CHANNEL raw=%r type=%s", settings.LOG_CHANNEL, type(settings.LOG_CHANNEL))
         if settings.LOG_CHANNEL:
             try:
-                await send_to_channel_raw(
+                await send_startup_log(
                     self,
                     int(settings.LOG_CHANNEL),
-                    f"✅ Bot started: {self.username}\n\n{LOG_STR}"
+                    f"<b>✅ Bot started</b>: {self.username}\n\n<pre>{LOG_STR}</pre>",
                 )
             except Exception:
-                logger.exception("Failed to send startup message to LOG_CHANNEL via RAW")
+                logger.exception("Failed to send startup message to LOG_CHANNEL")
 
         # Note: Startup message to LOG_CHANNEL may fail for private channels
         # due to Pyrogram peer cache limitations with bots on private channels.
