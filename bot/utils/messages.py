@@ -10,7 +10,7 @@ class Texts:
     # ───────────────────────────────────
 
     START_TXT = """
-👋 Hey {}, Welcome to <b>{}</b> — your smart movie search companion!
+👋 Hey {}, I'm <b>F L I X Y</b> — your smart movie search companion!
 
 🎬 <i>Just <b>type any movie name</b> and I'll find it for you instantly.</i> 
 """

@@ -2,6 +2,7 @@ import asyncio
 import logging
 import logging.config
 import os
+import time
 from datetime import datetime
 from typing import AsyncGenerator, Optional, Union
 
@@ -138,10 +139,29 @@ class Bot(Client):
         log_channel = getattr(settings, "LOG_CHANNEL", 0)
         if log_channel:
             try:
+                startup_time = datetime.now()
+                boot_duration = (startup_time - RuntimeCache.startup_time).total_seconds()
+                
+                # Measure ping
+                ping_start = time.perf_counter()
+                await self.get_me()
+                ping_ms = (time.perf_counter() - ping_start) * 1000
+                
+                startup_msg = (
+                    f"<b>🚀 Flixy Search Bot Online</b>\n\n"
+                    f"<blockquote>\n"
+                    f"IMDB:        <b>{('Enabled ✓' if settings.IMDB else 'Disabled ✗')}</b>\n"
+                    f"SpellCheck:  <b>{('Enabled ✓' if settings.SPELL_CHECK_REPLY else 'Disabled ✗')}</b>\n"
+                    f"Max Results: <b>{(settings.MAX_LIST_ELM if settings.MAX_LIST_ELM else 'Default')}</b>\n"
+                    f"</blockquote>\n\n"
+                    f"⚡ Ping: <b>{ping_ms:.0f}</b> ms\n"
+                    f"⏱ Boot: <b>{boot_duration:.2f}s</b>\n\n"
+                    f"Ready."
+                )
                 await send_startup_log(
                     self,
                     int(log_channel),
-                    f"<b>✅ Bot started</b>: {self.username}\n\n<blockquote>{LOG_STR}</blockquote>",
+                    startup_msg,
                 )
             except Exception:
                 logger.exception("Failed to send startup message to LOG_CHANNEL")

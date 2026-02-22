@@ -72,6 +72,21 @@ async def start_handler(client: Client, message: Message):
     # ── PRIVATE START ──
     if not await db.is_user_exist(message.from_user.id):
         await db.add_user(message.from_user.id, message.from_user.first_name)
+        
+        # Notify LOG_CHANNEL of new user registration
+        log_channel = getattr(settings, "LOG_CHANNEL", 0)
+        if log_channel:
+            try:
+                user_link = f"<a href='tg://user?id={message.from_user.id}'>{message.from_user.first_name}</a>"
+                username_str = f" (@{message.from_user.username})" if message.from_user.username else ""
+                notification = (
+                    f"<b>👤 New User Registered</b>\n\n"
+                    f"User ID: <code>{message.from_user.id}</code>\n"
+                    f"Name: {user_link}{username_str}"
+                )
+                await client.send_message(log_channel, notification, parse_mode=enums.ParseMode.HTML)
+            except Exception:
+                logger.exception("Failed to send new user notification to LOG_CHANNEL")
 
     if len(message.command) != 2:
         buttons = [

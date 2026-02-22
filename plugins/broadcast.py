@@ -1,4 +1,5 @@
 import asyncio
+import logging
 import time
 import datetime
 
@@ -9,6 +10,8 @@ from pyrogram.enums import ParseMode
 from database.users_chats_db import db
 from bot.config import settings
 from bot.utils.broadcast import broadcast_messages
+
+logger = logging.getLogger(__name__)
 
 
 def _progress_bar(percent: int, length: int = 10) -> str:
@@ -141,17 +144,32 @@ async def broadcast_handler(client: Client, message: Message):
 
     # Final report
     elapsed = int(time.time() - start_time)
+    final_report = _build_report_html(
+        title="📣 Broadcast Completed",
+        total=total_users,
+        done=done,
+        success=success,
+        blocked=blocked,
+        deleted=deleted,
+        failed=failed,
+        duration_seconds=elapsed,
+    )
+    
     await status.edit_text(
-        _build_report_html(
-            title="📣 Broadcast Completed",
-            total=total_users,
-            done=done,
-            success=success,
-            blocked=blocked,
-            deleted=deleted,
-            failed=failed,
-            duration_seconds=elapsed,
-        ),
+        final_report,
         parse_mode=ParseMode.HTML,
         disable_web_page_preview=True,
     )
+    
+    # Send copy to LOG_CHANNEL
+    log_channel = getattr(settings, "LOG_CHANNEL", 0)
+    if log_channel:
+        try:
+            await client.send_message(
+                log_channel,
+                final_report,
+                parse_mode=ParseMode.HTML,
+                disable_web_page_preview=True,
+            )
+        except Exception:
+            logger.exception("Failed to send broadcast report to LOG_CHANNEL")
