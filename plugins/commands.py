@@ -53,7 +53,7 @@ async def start_handler(client: Client, message: Message):
             user_mention = message.chat.title
 
         await message.reply(
-            Texts.START_TXT.format(
+            Texts.ADMIN_TXT.format(
                 user_mention,
                 RuntimeCache.bot_username,
             ),
