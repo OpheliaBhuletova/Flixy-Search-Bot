@@ -43,7 +43,7 @@ async def start_handler(client: Client, message: Message):
     # ── GROUP START ──
     if message.chat.type in {enums.ChatType.GROUP, enums.ChatType.SUPERGROUP}:
         buttons = [
-            [InlineKeyboardButton("🤖 Updates", url="https://t.me/+svD1FU_ty1Y3MmQ1")],
+            [InlineKeyboardButton("🤖 Updates", url="https://t.me/+w7aX0q-ex1U1NDc1")],
             [InlineKeyboardButton("❓Help", url=f"https://t.me/{RuntimeCache.bot_username}?start=help")]
         ]
         # create a mention string compatible with markdown (we always send markdown here)
@@ -77,7 +77,7 @@ async def start_handler(client: Client, message: Message):
         buttons = [
             [
                 InlineKeyboardButton("🔍 Search", switch_inline_query_current_chat=""),
-                InlineKeyboardButton("🤖 Updates", url="https://t.me/+svD1FU_ty1Y3MmQ1")
+                InlineKeyboardButton("🤖 Updates", url="https://t.me/+w7aX0q-ex1U1NDc1")
             ],
             [
                 InlineKeyboardButton("❓Help", callback_data="help"),
