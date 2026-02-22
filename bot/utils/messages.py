@@ -57,12 +57,12 @@ Link your groups to the bot and control them from PM.
 📌 <b>Bot Information</b>
 
 <b>🤖 Name:</b> {}  
-    <b>👨‍💻 Developer:</b> <a href="https://t.me/OpheliaBhuletova">Ophelia Bhuletova</a>  
+<b>👨‍💻 Developer:</b> <a href="https://t.me/OpheliaBhuletova">Ophelia Bhuletova</a>  
 <b>📚 Framework:</b> Pyrogram  
 <b>🐍 Language:</b> Python 3.11+  
 <b>🗄 Database:</b> MongoDB  
 <b>🌐 Hosting:</b> Koyeb  
-    <b>🔖 Version:</b> V2.1  
+<b>🔖 Version:</b> V2.1  
 
 Built for speed, stability, and smooth movie searching 🚀
 """
