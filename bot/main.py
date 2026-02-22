@@ -129,7 +129,7 @@ class Bot(Client):
 
         # Attempt to send a startup message to the configured logs channel
         log_channel = getattr(settings, "LOG_CHANNEL", 0)
-
+        logger.info("LOG_CHANNEL raw=%r type=%s", settings.LOG_CHANNEL, type(settings.LOG_CHANNEL))
         if log_channel:
             try:
                 # env vars often come as strings -> force int when numeric
