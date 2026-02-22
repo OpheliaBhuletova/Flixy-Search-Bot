@@ -12,7 +12,7 @@ class Texts:
     START_TXT = """
 👋 Hey {}, Welcome to <b>{}</b> — your smart movie search companion!
 
-🎬 Just <b>type any movie name</b> and I'll find it for you instantly.  
+🎬 <i>Just <b>type any movie name</b> and I'll find it for you instantly.</i> 
 """
 
     HELP_TXT = """
