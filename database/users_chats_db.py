@@ -158,6 +158,27 @@ class Database:
         chat = await self.grp.find_one({"id": int(id)})
         return chat.get("settings", self.default_settings()) if chat else self.default_settings()
 
+    # ─── Startup Images ────────────────────────────────────────────────────
+    async def add_startup_image(self, file_id):
+        """Add a file_id to the startup images collection."""
+        await self.db.startup_images.update_one(
+            {"_id": "images"},
+            {"$push": {"file_ids": file_id}},
+            upsert=True
+        )
+
+    async def get_startup_images(self):
+        """Get all startup image file_ids."""
+        doc = await self.db.startup_images.find_one({"_id": "images"})
+        return doc.get("file_ids", []) if doc else []
+
+    async def remove_startup_image(self, file_id):
+        """Remove a file_id from startup images."""
+        await self.db.startup_images.update_one(
+            {"_id": "images"},
+            {"$pull": {"file_ids": file_id}}
+        )
+
     # ─── Stats ───────────────────────────────────────────────────────────
     async def get_db_size(self):
         stats = await self.db.command("dbstats")

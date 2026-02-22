@@ -1,3 +1,4 @@
+import logging
 from pyrogram import Client, filters, enums
 import os
 from pyrogram.types import InlineKeyboardButton, InlineKeyboardMarkup
@@ -13,6 +14,8 @@ from database.ia_filterdb import Media
 from bot.utils.cache import RuntimeCache
 from bot.utils.helpers import get_size, get_settings, schedule_delete_message
 from bot.utils.messages import Texts as Text
+
+logger = logging.getLogger(__name__)
 
 
 @Client.on_message(filters.new_chat_members & filters.group)
@@ -292,7 +295,6 @@ async def list_chats_handler(client: Client, message):
                     title = f"Channel {ch_id}"
                 cid = chat.id
             except Exception as e:
-                logger = logging.getLogger(__name__)
                 logger.warning(f"Failed to get chat info for {ch}: {e}")
                 title = str(ch)
                 cid = ch

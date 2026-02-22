@@ -99,8 +99,20 @@ async def start_handler(client: Client, message: Message):
                 InlineKeyboardButton("ℹ️ About", callback_data="about")
             ]
         ]
+        
+        # Get startup images from database and settings
+        startup_images = list(settings.PICS)
+        try:
+            db_images = await db.get_startup_images()
+            startup_images.extend(db_images)
+        except Exception:
+            logger.exception("Failed to get startup images from database")
+        
+        # Use a random image from available options
+        pic_to_use = random.choice(startup_images) if startup_images else settings.PICS[0]
+        
         await message.reply_photo(
-            random.choice(settings.PICS),
+            pic_to_use,
             caption=Texts.START_TXT.format(
                 message.from_user.mention,
                 RuntimeCache.bot_username,

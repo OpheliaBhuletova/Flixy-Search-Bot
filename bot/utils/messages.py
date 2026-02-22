@@ -194,6 +194,7 @@ Restricted commands for bot administrators.
 • `/ban` — ban a user  
 • `/unban` — unban a user  
 • `/channel` — list connected channels  
+• `/setstartup` — set startup image for /start command  
 • `/broadcast` — broadcast a message
 """
 
