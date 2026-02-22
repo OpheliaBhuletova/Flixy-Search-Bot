@@ -36,33 +36,27 @@ PORT = int(os.getenv("PORT", 8080))
 
 from pyrogram.raw import functions, types
 
-async def send_to_channel_raw(app, full_chat_id: int, text: str):
-    # Convert -100XXXXXXXXXX → XXXXXXXXXX
-    channel_id = int(str(full_chat_id)[4:])
+async def send_to_channel_raw(app, chat_id: int, text: str):
+    # This returns InputPeerChannel / InputPeerChat / InputPeerUser as needed
+    peer = await app.resolve_peer(chat_id)
 
-    # Find access_hash from dialogs
-    access_hash = None
-    async for dialog in app.get_dialogs():
-        if dialog.chat and dialog.chat.id == full_chat_id:
-            access_hash = getattr(dialog.chat, "access_hash", None)
-            break
-
-    if not access_hash:
-        raise RuntimeError(
-            "Channel not found in dialogs. "
-            "Make sure the bot is added as admin and restart."
+    try:
+        await app.invoke(
+            functions.messages.SendMessage(
+                peer=peer,
+                message=text,
+                random_id=app.rnd_id()
+            )
         )
-
-    await app.invoke(
-        functions.messages.SendMessage(
-            peer=types.InputPeerChannel(
-                channel_id=channel_id,
-                access_hash=access_hash
-            ),
-            message=text,
-            random_id=app.rnd_id()
+    except FloodWait as e:
+        await asyncio.sleep(e.value)
+        await app.invoke(
+            functions.messages.SendMessage(
+                peer=peer,
+                message=text,
+                random_id=app.rnd_id()
+            )
         )
-    )
 
 class Bot(Client):
     def __init__(self):
