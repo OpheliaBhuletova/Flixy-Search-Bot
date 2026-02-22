@@ -53,7 +53,7 @@ async def start_handler(client: Client, message: Message):
             user_mention = message.chat.title
 
         await message.reply(
-            Texts.ADMIN_TXT.format(
+            Texts.START_TXT.format(
                 user_mention,
                 RuntimeCache.bot_username,
             ),
@@ -86,7 +86,7 @@ async def start_handler(client: Client, message: Message):
         ]
         await message.reply_photo(
             random.choice(settings.PICS),
-            caption=Texts.ADMIN_TXT.format(
+            caption=Texts.START_TXT.format(
                 message.from_user.mention,
                 RuntimeCache.bot_username,
             ),

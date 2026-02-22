@@ -9,7 +9,7 @@ class Texts:
     # START / HELP / ABOUT
     # ───────────────────────────────────
 
-    ADMIN_TXT = """
+    START_TXT = """
 👋 Hey {},  
 Welcome to <b>{}</b> — your smart movie search companion!
 
@@ -22,7 +22,6 @@ Sit back, relax, and enjoy unlimited entertainment 🍿✨
 
 I can help you search movies, manage filters, connect chats, and more.  
 Choose a category below to explore available commands 👇
- • `/channels` — list connected channels  
 """
 
     # per–category descriptions used by callback handler
