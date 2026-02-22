@@ -32,7 +32,7 @@ class Settings(BaseSettings):
     CACHE_TIME: int = 300
     USE_CAPTION_FILTER: bool = False
     PICS: List[str] = [
-        "https://te.legra.ph/file/84fcfcb9eaa399d702434.jpg"
+        "https://github.com/OpheliaBhuletova/Flixy-Search-Bot/blob/main/static/images/startup_image.jpg"
     ]
 
     # ─── Admins, Channels & Users ──────────────────────────────────────
