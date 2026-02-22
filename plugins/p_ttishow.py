@@ -281,7 +281,8 @@ async def list_chats_handler(client: Client, message):
         for ch in items:
             try:
                 chat = await client.get_chat(ch)
-                title = chat.title or str(ch)
+                # Try title first, then username, then fallback to ID
+                title = chat.title or chat.username or str(ch)
                 cid = chat.id
             except Exception:
                 title = str(ch)
