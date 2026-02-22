@@ -7,7 +7,7 @@ from typing import AsyncGenerator, Optional, Union
 
 import aiohttp
 from aiohttp import web
-from pyrogram import Client, __version__, idle, types
+from pyrogram import Client, __version__, idle, types, enums
 from pyrogram.errors import FloodWait
 
 from bot.config import LOG_STR, settings
@@ -50,7 +50,7 @@ async def send_startup_log(app: Client, chat_id: int, text: str) -> None:
         await app.send_message(
             chat_id,
             text,
-            parse_mode="HTML",
+            parse_mode=enums.ParseMode.HTML,
             disable_web_page_preview=True,
         )
         return
