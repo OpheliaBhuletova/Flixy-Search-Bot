@@ -111,6 +111,9 @@ class Bot(Client):
         )
 
     async def start(self):
+        # Capture startup time at the very beginning
+        RuntimeCache.startup_time = datetime.now()
+        
         # Load banned users/chats + ensure indexes
         db = get_db_instance()
         try:
@@ -164,7 +167,6 @@ class Bot(Client):
         RuntimeCache.bot_username = me.username
         RuntimeCache.bot_name = me.first_name
         RuntimeCache.current = me.id
-        RuntimeCache.startup_time = datetime.now()
 
         self.username = f"@{me.username}"
 
@@ -175,8 +177,7 @@ class Bot(Client):
         log_channel = getattr(settings, "LOG_CHANNEL", 0)
         if log_channel:
             try:
-                startup_time = datetime.now()
-                boot_duration = (startup_time - RuntimeCache.startup_time).total_seconds()
+                boot_duration = (datetime.now() - RuntimeCache.startup_time).total_seconds()
                 
                 # Measure ping
                 ping_start = time.perf_counter()
