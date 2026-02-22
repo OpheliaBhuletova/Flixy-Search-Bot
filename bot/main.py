@@ -9,6 +9,7 @@ from pyrogram import Client, __version__, idle, enums
 from pyrogram.raw.all import layer
 from pyrogram import types
 from pyrogram.errors import FloodWait
+from pyrogram.raw import functions, types
 
 from aiohttp import web
 
@@ -33,6 +34,35 @@ logging.getLogger("imdbpy").setLevel(logging.ERROR)
 
 PORT = int(os.getenv("PORT", 8080))
 
+from pyrogram.raw import functions, types
+
+async def send_to_channel_raw(app, full_chat_id: int, text: str):
+    # Convert -100XXXXXXXXXX → XXXXXXXXXX
+    channel_id = int(str(full_chat_id)[4:])
+
+    # Find access_hash from dialogs
+    access_hash = None
+    async for dialog in app.get_dialogs():
+        if dialog.chat and dialog.chat.id == full_chat_id:
+            access_hash = getattr(dialog.chat, "access_hash", None)
+            break
+
+    if not access_hash:
+        raise RuntimeError(
+            "Channel not found in dialogs. "
+            "Make sure the bot is added as admin and restart."
+        )
+
+    await app.invoke(
+        functions.messages.SendMessage(
+            peer=types.InputPeerChannel(
+                channel_id=channel_id,
+                access_hash=access_hash
+            ),
+            message=text,
+            random_id=app.rnd_id()
+        )
+    )
 
 class Bot(Client):
     def __init__(self):
@@ -130,23 +160,15 @@ class Bot(Client):
         # Attempt to send a startup message to the configured logs channel
         log_channel = getattr(settings, "LOG_CHANNEL", 0)
         logger.info("LOG_CHANNEL raw=%r type=%s", settings.LOG_CHANNEL, type(settings.LOG_CHANNEL))
-        if log_channel:
+        if settings.LOG_CHANNEL:
             try:
-                # env vars often come as strings -> force int when numeric
-                if isinstance(log_channel, str) and log_channel.lstrip("-").isdigit():
-                    log_channel = int(log_channel)
-
-                # Force resolve (gives clearer errors if bot isn't in chat)
-                await self.get_chat(log_channel)
-
-                await self.send_message(
-                    log_channel,
-                    f"<b>✅ Bot started</b>: {self.username}\n\n<pre>{LOG_STR}</pre>",
-                    parse_mode=enums.ParseMode.HTML,
-                    disable_web_page_preview=True,
+                await send_to_channel_raw(
+                    self,
+                    int(settings.LOG_CHANNEL),
+                    f"✅ Bot started: {self.username}\n\n{LOG_STR}"
                 )
             except Exception:
-                logger.exception(f"Failed to send startup message to LOG_CHANNEL={log_channel!r}")
+                logger.exception("Failed to send startup message to LOG_CHANNEL via RAW")
 
         # Note: Startup message to LOG_CHANNEL may fail for private channels
         # due to Pyrogram peer cache limitations with bots on private channels.
