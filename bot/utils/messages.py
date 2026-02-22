@@ -7,7 +7,7 @@ class Texts:
     # START / HELP / ABOUT
     # ───────────────────────────────────
 
-    START_TXT = """
+    ADMIN_TXT = """
 👋 Hey {},  
 Welcome to <b>{}</b> — your smart movie search companion!
 
@@ -20,7 +20,7 @@ Sit back, relax, and enjoy unlimited entertainment 🍿✨
 
 I can help you search movies, manage filters, connect chats, and more.  
 Choose a category below to explore available commands 👇
-"""
+ • `/channels` — list connected channels  
 
     # per–category descriptions used by callback handler
     HELP_SEARCH_TXT = """
@@ -55,12 +55,12 @@ Link your groups to the bot and control them from PM.
 📌 <b>Bot Information</b>
 
 <b>🤖 Name:</b> {}  
-<b>👨‍💻 Developer:</b> <a href="https://t.me/PopzyBots">Popzy Bots</a>  
+    <b>👨‍💻 Developer:</b> <a href="https://t.me/OpheliaBhuletova">Ophelia Bhuletova</a>  
 <b>📚 Framework:</b> Pyrogram  
 <b>🐍 Language:</b> Python 3.11+  
 <b>🗄 Database:</b> MongoDB  
 <b>🌐 Hosting:</b> Koyeb  
-<b>🔖 Version:</b> v1.0 • Modernized  
+    <b>🔖 Version:</b> V2.1  
 
 Built for speed, stability, and smooth movie searching 🚀
 """

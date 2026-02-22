@@ -1,4 +1,5 @@
 from pyrogram import Client, filters, enums
+import os
 from pyrogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 from pyrogram.errors import ChatAdminRequired
 from pyrogram.errors.exceptions.bad_request_400 import (
@@ -160,6 +161,42 @@ async def stats_handler(client: Client, message):
     )
 
 
+@Client.on_message(filters.command("logs") & filters.user(settings.ADMINS))
+async def logs_handler(client: Client, message):
+    """Send recent error log contents to admins.
+
+    If the log is small send as a message, otherwise send as a document.
+    """
+    log_path = os.path.join("logs", "flixy-bot.log")
+    try:
+        with open(log_path, "r", encoding="utf-8", errors="replace") as f:
+            lines = f.readlines()
+    except Exception as e:
+        return await message.reply(f"Could not read log file: {e}")
+
+    if not lines:
+        return await message.reply("Log file is empty.")
+
+    tail = "".join(lines[-500:])
+
+    if len(tail) <= 4000:
+        await message.reply(f"<pre>{tail}</pre>", parse_mode=enums.ParseMode.HTML)
+        return
+
+    tmp_name = "logs_tail.txt"
+    try:
+        with open(tmp_name, "w", encoding="utf-8") as f:
+            f.write(tail)
+        sent = await message.reply_document(tmp_name)
+        if message.chat.type == enums.ChatType.PRIVATE:
+            schedule_delete_message(client, sent.chat.id, sent.id)
+    finally:
+        try:
+            os.remove(tmp_name)
+        except Exception:
+            pass
+
+
 @Client.on_message(filters.command("ban") & filters.user(settings.ADMINS))
 async def ban_user_handler(client: Client, message):
     if len(message.command) < 2:
@@ -199,6 +236,14 @@ async def unban_user_handler(client: Client, message):
 @Client.on_message(filters.command("users") & filters.user(settings.ADMINS))
 async def list_users_handler(client: Client, message):
     msg = await message.reply("Fetching users...")
+    total_users = await db.total_users_count()
+    if total_users == 0:
+        return await msg.edit(
+            "📭 <b>No users found</b>\n\n"
+            "There are currently no users registered with the bot.",
+            parse_mode=enums.ParseMode.HTML,
+        )
+
     users = await db.get_all_users()
     text = "Users:\n\n"
 
@@ -218,9 +263,51 @@ async def list_users_handler(client: Client, message):
             schedule_delete_message(client, sent.chat.id, sent.id)
 
 
-@Client.on_message(filters.command("chats") & filters.user(settings.ADMINS))
+@Client.on_message(filters.command(["chats", "channels"]) & filters.user(settings.ADMINS))
 async def list_chats_handler(client: Client, message):
-    msg = await message.reply("Fetching chats...")
+    cmd = message.command[0].lower() if message.command else "chats"
+    msg = await message.reply("Fetching...")
+
+    if cmd == "channels":
+        items = settings.CHANNELS or []
+        if not items:
+            return await msg.edit(
+                "📭 <b>No channels configured</b>\n\n"
+                "No channels are set in the `CHANNELS` configuration. Add channels to the environment to enable indexing.",
+                parse_mode=enums.ParseMode.HTML,
+            )
+
+        text = "Channels:\n\n"
+        for ch in items:
+            try:
+                chat = await client.get_chat(ch)
+                title = chat.title or str(ch)
+                cid = chat.id
+            except Exception:
+                title = str(ch)
+                cid = ch
+            text += f"Title: {title} | ID: {cid}\n"
+
+        try:
+            await msg.edit(text)
+        except MessageTooLong:
+            with open("channels.txt", "w") as f:
+                f.write(text)
+            sent = await message.reply_document("channels.txt")
+            if message.chat.type == enums.ChatType.PRIVATE:
+                schedule_delete_message(client, sent.chat.id, sent.id)
+        return
+
+    # default: /chats — list groups saved in DB via /connect
+    total_chats = await db.total_chat_count()
+    if total_chats == 0:
+        return await msg.edit(
+            "📭 <b>No connected groups</b>\n\n"
+            "You haven't connected any groups yet. Go to a group where you're admin and use <code>/connect {group_id}</code> in the bot's PM.",
+            parse_mode=enums.ParseMode.HTML,
+        )
+
+    await msg.edit_text("Fetching chats...")
     chats = await db.get_all_chats()
     text = "Chats:\n\n"
 

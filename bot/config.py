@@ -52,7 +52,7 @@ class Settings(BaseSettings):
     SUPPORT_CHAT: str = "TitanHelpDesk"
 
     P_TTI_SHOW_OFF: bool = False
-    IMDB: bool = False
+    IMDB: bool = True
     SINGLE_BUTTON: bool = True
 
     CUSTOM_FILE_CAPTION: Optional[str] = None
