@@ -14,6 +14,7 @@ from database.ia_filterdb import Media
 from bot.utils.cache import RuntimeCache
 from bot.utils.helpers import get_size, get_settings, schedule_delete_message
 from bot.utils.messages import Texts as Text
+from bot.main import get_chat_info
 
 logger = logging.getLogger(__name__)
 
@@ -285,15 +286,15 @@ async def list_chats_handler(client: Client, message):
             try:
                 # Convert to int if it's a string
                 ch_id = int(ch) if isinstance(ch, str) else ch
-                chat = await client.get_chat(ch_id)
-                # Use title as the primary source, with fallbacks
-                if chat.title:
-                    title = chat.title
-                elif chat.username:
-                    title = f"@{chat.username}"
+                chat_info = await get_chat_info(client, ch_id)
+                
+                if chat_info:
+                    title = chat_info.get("title") or chat_info.get("username") or f"Channel {ch_id}"
+                    cid = chat_info.get("id", ch_id)
                 else:
-                    title = f"Channel {ch_id}"
-                cid = chat.id
+                    # Fallback if Bot API also fails
+                    title = str(ch)
+                    cid = ch
             except Exception as e:
                 logger.warning(f"Failed to get chat info for {ch}: {e}")
                 title = str(ch)

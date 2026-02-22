@@ -62,6 +62,42 @@ async def send_startup_log(app: Client, chat_id: int, text: str) -> None:
     await botapi_send_message(app.bot_token, chat_id, text)
 
 
+async def botapi_get_chat(token: str, chat_id: int) -> dict | None:
+    """Fetch chat info via Bot API. Returns dict with 'title' and 'id' or None on failure."""
+    url = f"https://api.telegram.org/bot{token}/getChat"
+    payload = {"chat_id": chat_id}
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.post(url, data=payload) as resp:
+                data = await resp.json()
+                if data.get("ok") and data.get("result"):
+                    result = data["result"]
+                    return {
+                        "id": result.get("id"),
+                        "title": result.get("title"),
+                        "username": result.get("username"),
+                    }
+    except Exception:
+        pass
+    return None
+
+
+async def get_chat_info(app: Client, chat_id: int) -> dict | None:
+    """Try Pyrogram first; fall back to Bot API for 'Peer id invalid' issue."""
+    try:
+        chat = await app.get_chat(chat_id)
+        return {
+            "id": chat.id,
+            "title": chat.title,
+            "username": chat.username,
+        }
+    except Exception as e:
+        if "Peer id invalid" not in str(e):
+            raise
+    
+    return await botapi_get_chat(app.bot_token, chat_id)
+
+
 class Bot(Client):
     def __init__(self):
         super().__init__(

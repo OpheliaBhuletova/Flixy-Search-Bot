@@ -16,7 +16,7 @@ from bot.config import settings
 from bot.utils.messages import Texts
 from bot.utils.cache import RuntimeCache
 from bot.utils.helpers import get_size, is_subscribed
-from bot.utils.helpers import get_settings, save_group_settings
+from bot.utils.helpers import get_settings, save_group_settings, get_file_id
 
 from database.ia_filterdb import Media, get_file_details, unpack_new_file_id
 from database.users_chats_db import db
@@ -36,6 +36,82 @@ async def gen_file_id(client: Client, message: Message):
         f"FILE_ID:\n<code>{msg.photo.file_id}</code>",
         parse_mode=enums.ParseMode.HTML
     )
+
+
+@Client.on_message(filters.command("setstartup") & filters.private)
+async def set_startup_image(client: Client, message: Message):
+    """Set startup image from replied or attached image (admin only).
+    
+    Usage:
+    - Reply to an image with /setstartup
+    - Send /setstartup with an image attached
+    """
+    # Check if user is an admin
+    if message.from_user.id not in settings.ADMINS:
+        await message.reply("❌ This command is restricted to administrators only.")
+        return
+    
+    logger.info(f"DEBUG: /setstartup handler triggered for admin {message.from_user.id}")
+    
+    # Get the image to process
+    image_message = None
+    
+    if message.reply_to_message:
+        image_message = message.reply_to_message
+    elif (message.photo or message.document):
+        image_message = message
+    
+    if not image_message:
+        logger.info("DEBUG: No image message found")
+        await message.reply("❌ Please reply to an image or send an image with this command.")
+        return
+    
+    # Extract file_id
+    file_info = get_file_id(image_message)
+    
+    if not file_info:
+        logger.info("DEBUG: Could not extract file_id")
+        await message.reply("❌ Could not extract file_id from the image.")
+        return
+    
+    try:
+        # Store in database
+        await db.add_startup_image(file_info.file_id)
+        
+        # Log to console
+        logger.info(f"Admin {message.from_user.id} set new startup image: {file_info.file_id}")
+        
+        # Send confirmation
+        success_msg = (
+            f"✅ <b>Startup image updated!</b>\n\n"
+            f"<b>File ID:</b> <code>{file_info.file_id}</code>\n"
+            f"<b>Media Type:</b> {file_info.message_type}\n\n"
+            f"<i>The image will be used as a random option in the /start response.</i>"
+        )
+        await message.reply(success_msg, parse_mode=enums.ParseMode.HTML)
+        
+        # Notify to LOG_CHANNEL
+        log_channel = getattr(settings, "LOG_CHANNEL", 0)
+        if log_channel:
+            try:
+                user = message.from_user
+                user_link = f"<a href='tg://user?id={user.id}'>{user.first_name}</a>"
+                username_str = f" (@{user.username})" if user.username else ""
+                
+                log_msg = (
+                    f"<b>⚙️ Startup Image Updated</b>\n\n"
+                    f"<b>Admin:</b> {user_link}{username_str}\n"
+                    f"<b>Admin ID:</b> <code>{user.id}</code>\n"
+                    f"<b>File ID:</b> <code>{file_info.file_id}</code>\n"
+                    f"<b>Media Type:</b> {file_info.message_type}"
+                )
+                await client.send_message(log_channel, log_msg, parse_mode=enums.ParseMode.HTML)
+            except Exception:
+                logger.exception("Failed to notify LOG_CHANNEL about startup image update")
+    
+    except Exception as e:
+        logger.exception("Error setting startup image")
+        await message.reply(f"❌ Error: {str(e)}")
 
 
 @Client.on_message(filters.command("start") & filters.incoming)

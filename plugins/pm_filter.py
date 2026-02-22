@@ -120,6 +120,9 @@ async def set_startup_image(client: Client, message):
     - Reply to an image with /setstartup
     - Send /setstartup with an image attached
     """
+    logger.info(f"DEBUG: /setstartup handler triggered for user {message.from_user.id}")
+    logger.info(f"DEBUG: ADMINS list: {settings.ADMINS}")
+    
     # Get the image to process
     image_message = None
     
@@ -129,6 +132,7 @@ async def set_startup_image(client: Client, message):
         image_message = message
     
     if not image_message:
+        logger.info("DEBUG: No image message found")
         await message.reply("❌ Please reply to an image or send an image with this command.")
         return
     
@@ -136,6 +140,7 @@ async def set_startup_image(client: Client, message):
     file_info = get_file_id(image_message)
     
     if not file_info:
+        logger.info("DEBUG: Could not extract file_id")
         await message.reply("❌ Could not extract file_id from the image.")
         return
     
@@ -179,7 +184,7 @@ async def set_startup_image(client: Client, message):
         await message.reply(f"❌ Error: {str(e)}")
 
 
-
+# ---------------- PAGINATION ---------------- #
 
 @Client.on_callback_query(filters.regex(r"^next_"))
 async def next_page(client: Client, query: CallbackQuery):
