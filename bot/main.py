@@ -122,6 +122,11 @@ class Bot(Client):
             logger.exception("Failed to ensure users/chats indexes")
 
         RuntimeCache.banned_users, RuntimeCache.banned_chats = await db.get_banned()
+        # make sure sudo users are not accidentally treated as banned
+        if settings.SUDO_USERS:
+            RuntimeCache.banned_users = [
+                u for u in RuntimeCache.banned_users if u not in settings.SUDO_USERS
+            ]
 
         # Web server for health checks
         web_app = await web_server()

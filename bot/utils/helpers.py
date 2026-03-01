@@ -88,7 +88,21 @@ async def is_subscribed(client, query) -> bool:
         return False
     except Exception:
         return True
-    
+
+
+def is_sudo(user_id: int) -> bool:
+    """Return ``True`` if the given user is listed in ``settings.SUDO_USERS``.
+
+    Sudo users bypass various restrictions (subscription checks, bans,
+    etc.) so they can always receive PM movie responses regardless of
+    the normal authorization state.
+    """
+    try:
+        return user_id in settings.SUDO_USERS
+    except Exception:
+        # if settings not yet imported or list misconfigured, be safe
+        return False
+
 from database.users_chats_db import get_db_instance
 
 async def get_settings(chat_id: int):

@@ -38,9 +38,14 @@ class Settings(BaseSettings):
     # ─── Admins, Channels & Users ──────────────────────────────────────
     ADMINS: List[Union[int, str]] = []
     CHANNELS: List[Union[int, str]] = []
-    AUTH_USERS: List[Union[int, str]] = []
-    AUTH_CHANNEL: Optional[Union[int, str]] = None
+    # previously supported AUTH_USERS/AUTH_CHANNEL settings have been removed;
+    # sudo users now control private search access.  AUTH_GROUPS remains for
+    # future use.
     AUTH_GROUPS: Optional[List[int]] = None
+
+    # sudo users (super-users) bypass certain restrictions such as
+    # subscription checks and bans; configured via environment.
+    SUDO_USERS: List[Union[int, str]] = []
 
     # ─── Database ──────────────────────────────────────────────────────
     DATABASE_URL: str

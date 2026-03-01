@@ -28,7 +28,9 @@ Choose a category below to explore available commands 👇
 
 • Type any movie name in any chat using inline mode:
   `@{} <movie name>`
-• Or send `/search <query>` or `/imdb <query>` in private.
+
+• Private `/search` or `/imdb` requests are available **only to sudo
+  users or admins**; normal users should use inline mode instead.
 """
 
     HELP_FILTERS_TXT = """
@@ -181,7 +183,10 @@ Helpful commands for information and utilities.
     ADMIN_TXT = """
 🔐 **Admin Controls**
 
-Restricted commands for bot administrators.
+Restricted commands for bot administrators.  
+(Additionally, IDs listed under `SUDO_USERS` are treated as
+super‑users and can bypass certain restrictions such as subscription
+requirements and bans.)
 
 📝 **Commands**
 • `/logs` — view recent error logs  

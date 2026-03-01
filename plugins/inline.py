@@ -16,21 +16,17 @@ from database.ia_filterdb import get_search_results
 
 logger = logging.getLogger(__name__)
 
-INLINE_CACHE_TIME = (
-    0 if settings.AUTH_USERS or settings.AUTH_CHANNEL else settings.CACHE_TIME
-)
+INLINE_CACHE_TIME = settings.CACHE_TIME
 
 
 async def inline_user_allowed(query: InlineQuery) -> bool:
-    if settings.AUTH_USERS:
-        return bool(
-            query.from_user and query.from_user.id in settings.AUTH_USERS
-        )
-
+    # only banned users are prevented from inline access; sudo/admins
+    # automatically bypass bans by virtue of not being in the banned list.
     return bool(
         query.from_user
         and query.from_user.id not in RuntimeCache.banned_users
     )
+
 
 
 @Client.on_inline_query()
@@ -38,20 +34,14 @@ async def inline_query_handler(client: Client, query: InlineQuery):
     """Handle inline search queries"""
 
     if not await inline_user_allowed(query):
+        # likely a banned user
         return await query.answer(
             results=[],
             cache_time=0,
-            switch_pm_text="Sorry, you are not authorized to use this bot.",
+            switch_pm_text="🚫 You are not allowed to use this bot.",
             switch_pm_parameter="unauthorized",
         )
 
-    if settings.AUTH_CHANNEL and not await is_subscribed(client, query):
-        return await query.answer(
-            results=[],
-            cache_time=0,
-            switch_pm_text="Please join the updates channel to use this bot.",
-            switch_pm_parameter="subscribe",
-        )
 
     query_text = query.query.strip()
     offset = int(query.offset or 0)

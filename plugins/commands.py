@@ -217,19 +217,4 @@ async def start_handler(client: Client, message: Message):
         )
         return
 
-    # ── FORCE SUB ──
-    if settings.AUTH_CHANNEL and not await is_subscribed(client, message):
-        try:
-            invite = await client.create_chat_invite_link(settings.AUTH_CHANNEL)
-        except ChatAdminRequired:
-            logger.error("Bot must be admin in AUTH_CHANNEL")
-            return
-
-        buttons = [[InlineKeyboardButton("🤖 Join Updates Channel", url=invite.invite_link)]]
-        await client.send_message(
-            message.from_user.id,
-            "**Please join the updates channel to use this bot!**",
-            reply_markup=InlineKeyboardMarkup(buttons),
-            parse_mode=enums.ParseMode.MARKDOWN
-        )
-        return
+    # AUTH_CHANNEL removed — no forced subscription required

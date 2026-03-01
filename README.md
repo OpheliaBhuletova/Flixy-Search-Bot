@@ -32,8 +32,17 @@ All existing commands and user-facing behavior are preserved, ensuring **full ba
 - ⚡ Async architecture for better performance
 - 🧩 Plugin-based modular structure
 - 🛡 Admin-only controls for indexing and maintenance
+- 👑 **Sudo users** can bypass subscription/bans and always receive PM search responses
 - 🗃 MongoDB-backed persistent storage
 - 🚀 Ready for modern deployment (Docker-friendly)
+
+---
+
+### 🛠 Access Levels
+
+- **Admin users** – full bot access, including PM movie replies and all admin commands.
+- **Sudo users** – inline search like normal users plus private movie responses; also exempt from bans/subscription checks.
+- **Normal users** – unrestricted inline search with no extra permissions.
 
 ---
 

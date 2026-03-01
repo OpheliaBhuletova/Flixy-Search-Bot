@@ -268,6 +268,9 @@ async def ban_user_handler(client: Client, message):
     user = await client.get_users(target)
     status = await db.get_ban_status(user.id)
 
+    if user.id in settings.SUDO_USERS:
+        return await message.reply("❌ Cannot ban a sudo user.")
+
     if status["is_banned"]:
         return await message.reply(f"{user.mention} is already banned")
 

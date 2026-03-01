@@ -8,6 +8,12 @@ from bot.config import settings
 
 
 async def banned_users(_, __, message: Message) -> bool:
+    # sudo users should never be treated as banned, even if their ID
+    # appears in the database. This allows them to use PM features
+    # regardless of normal restrictions.
+    if message.from_user and message.from_user.id in settings.SUDO_USERS:
+        return False
+
     return (
         message.from_user is not None
         and message.from_user.id in RuntimeCache.banned_users
