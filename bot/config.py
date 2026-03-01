@@ -43,6 +43,9 @@ class Settings(BaseSettings):
     # future use.
     AUTH_GROUPS: Optional[List[int]] = None
 
+    # Ad channels: send periodic promotional message to these channel IDs
+    AD_CHANNEL: List[Union[int, str]] = []
+
     # sudo users (super-users) bypass certain restrictions such as
     # subscription checks and bans; configured via environment.
     SUDO_USERS: List[Union[int, str]] = []

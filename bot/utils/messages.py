@@ -62,7 +62,7 @@ Link your groups to the bot and control them from PM.
 <b>🐍 Language:</b> Python 3.11+  
 <b>🗄 Database:</b> MongoDB  
 <b>🌐 Hosting:</b> Koyeb  
-<b>🔖 Version:</b> V2.1  
+<b>🔖 Version:</b> V2.2  
 
 Built for speed, stability, and smooth movie searching 🚀
 """
@@ -184,9 +184,7 @@ Helpful commands for information and utilities.
 🔐 **Admin Controls**
 
 Restricted commands for bot administrators.  
-(Additionally, IDs listed under `SUDO_USERS` are treated as
-super‑users and can bypass certain restrictions such as subscription
-requirements and bans.)
+(Additionally, IDs listed under `SUDO_USERS` are treated as super‑users and can bypass certain restrictions such as subscription requirements and bans.)
 
 📝 **Commands**
 • `/logs` — view recent error logs  

@@ -13,6 +13,8 @@ from pyrogram.errors import FloodWait
 
 from bot.config import LOG_STR, settings
 from bot.utils.cache import RuntimeCache
+from bot.utils.helpers import schedule_delete_message
+from pyrogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 from database.ia_filterdb import Media
 from database.users_chats_db import get_db_instance
 from plugins import web_server
@@ -205,6 +207,46 @@ class Bot(Client):
                     int(log_channel),
                     startup_msg,
                 )
+
+        # Start periodic ad sender if channels are configured
+        if getattr(settings, "AD_CHANNEL", None):
+            async def _ad_sender(app: Client):
+                # interval: 6 hours, delete_after: 3 hours
+                interval = 6 * 3600
+                delete_after = 3 * 3600
+                while True:
+                    for ch in settings.AD_CHANNEL:
+                        try:
+                            # hardcoded ad message (HTML)
+                            msg_text = (
+                                "<b>🚀 Tired of Searching Everywhere for Movies?</b>\n\n"
+                                "🍿 Let <b>F L I X Y</b> do it for you.\n\n"
+                                "🔎 Smart Inline Search\n"
+                                "⚡ Lightning Fast Results\n"
+                                "🎬 Movies & Series in Seconds\n\n"
+                                "No complicated steps. Just type and get what you want.\n\n"
+                                "<i>Start now 👉 @FSrchBot</i>"
+                            )
+                            buttons = InlineKeyboardMarkup(
+                                [[InlineKeyboardButton("Try Flixy", url=f"https://t.me/{RuntimeCache.bot_username}")]]
+                            )
+                            sent = await app.send_message(
+                                ch,
+                                msg_text,
+                                parse_mode=enums.ParseMode.HTML,
+                                disable_web_page_preview=True,
+                                reply_markup=buttons,
+                            )
+                            # schedule deletion after delete_after seconds
+                            schedule_delete_message(app, sent.chat.id, sent.id, delay_seconds=delete_after)
+                        except Exception:
+                            logger.exception("Failed to send scheduled ad to %s", ch)
+                    await asyncio.sleep(interval)
+
+            try:
+                asyncio.create_task(_ad_sender(self))
+            except Exception:
+                logger.exception("Failed to start ad sender task")
             except Exception:
                 logger.exception("Failed to send startup message to LOG_CHANNEL")
 
