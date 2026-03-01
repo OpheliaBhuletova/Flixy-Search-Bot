@@ -33,6 +33,7 @@ All existing commands and user-facing behavior are preserved, ensuring **full ba
 - 🧩 Plugin-based modular structure
 - 🛡 Admin-only controls for indexing and maintenance
 - 👑 **Sudo users** can bypass subscription/bans and always receive PM search responses
+- 🎬 Automatic broadcast when a new movie title is indexed (no duplicates)
 - 🗃 MongoDB-backed persistent storage
 - 🚀 Ready for modern deployment (Docker-friendly)
 

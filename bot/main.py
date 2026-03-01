@@ -47,21 +47,27 @@ async def botapi_send_message(token: str, chat_id: int, text: str) -> None:
                 raise RuntimeError(data)
 
 
-async def send_startup_log(app: Client, chat_id: int, text: str) -> None:
-    # Try Pyrogram first; fall back to Bot API for "Peer id invalid" issue.
+async def send_startup_log(app: Client, chat_id: int, text: str):
+    """Send a startup notification and return the sent Message if available.
+
+    Falls back to Bot API on PeerIdInvalid, in which case ``None`` is returned
+    since the Bot API response isn't wrapped in a Message object.
+    """
     try:
-        await app.send_message(
+        msg = await app.send_message(
             chat_id,
             text,
             parse_mode=enums.ParseMode.HTML,
             disable_web_page_preview=True,
         )
-        return
+        return msg
     except Exception as e:
         if "Peer id invalid" not in str(e):
             raise
 
+    # fallback: Bot API can't give us a message object
     await botapi_send_message(app.bot_token, chat_id, text)
+    return None
 
 
 async def botapi_get_chat(token: str, chat_id: int) -> dict | None:
@@ -202,11 +208,14 @@ class Bot(Client):
                     f"⏱ Boot: <b>{boot_duration:.2f}s</b>\n\n"
                     f"Ready."
                 )
-                await send_startup_log(
+                msg = await send_startup_log(
                     self,
                     int(log_channel),
                     startup_msg,
                 )
+                # delete log message after 5 minutes if we got a message object
+                if msg:
+                    schedule_delete_message(self, msg.chat.id, msg.id, delay_seconds=300)
             except Exception:
                 logger.exception("Failed to send startup log to LOG_CHANNEL")
 
@@ -242,15 +251,16 @@ class Bot(Client):
                             # schedule deletion after delete_after seconds
                             schedule_delete_message(app, sent.chat.id, sent.id, delay_seconds=delete_after)
                         except Exception as exc:
-                            # convert ValueError with peer message to same handling
-                            if isinstance(exc, ValueError) and "Peer id invalid" in str(exc):
+                            # if peer is invalid (ValueError from utils or PeerIdInvalid),
+                            # try sending via Bot API instead of logging an error.
+                            is_peer_error = (
+                                (isinstance(exc, ValueError) and "Peer id invalid" in str(exc))
+                                or isinstance(exc, PeerIdInvalid)
+                            )
+                            if is_peer_error:
                                 try:
                                     await botapi_send_message(app.bot_token, ch, msg_text)
-                                except Exception:
-                                    logger.exception("Bot API also failed for ad to %s", ch)
-                            elif isinstance(exc, PeerIdInvalid):
-                                try:
-                                    await botapi_send_message(app.bot_token, ch, msg_text)
+                                    logger.info("Sent ad to %s using Bot API fallback", ch)
                                 except Exception:
                                     logger.exception("Bot API also failed for ad to %s", ch)
                             else:

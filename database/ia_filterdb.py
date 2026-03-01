@@ -47,12 +47,14 @@ class Media(Document):
 
 
 # ─── Save Media ──────────────────────────────────────────────────────────
-async def save_file(media) -> Tuple[bool, int]:
+async def save_file(media) -> Tuple[bool, int, str]:
     """
+    Store media document and return status plus normalized movie title.
+
     Returns:
-        (True, 1)  → saved
-        (False, 0) → duplicate
-        (False, 2) → error
+        (True, 1, title)   → saved
+        (False, 0, title)  → duplicate
+        (False, 2, title)  → error
     """
 
     file_id, file_ref = unpack_new_file_id(media.file_id)
@@ -74,14 +76,14 @@ async def save_file(media) -> Tuple[bool, int]:
 
     try:
         await file.commit()
-        return True, 1
+        return True, 1, file_name
 
     except DuplicateKeyError:
-        return False, 0
+        return False, 0, file_name
 
     except Exception:
         logger.exception("Unexpected error while saving media")
-        return False, 2
+        return False, 2, file_name
 
 
 # ─── Search Engine ───────────────────────────────────────────────────────
@@ -155,6 +157,19 @@ def encode_file_id(data: bytes) -> str:
 
 def encode_file_ref(file_ref: bytes) -> str:
     return base64.urlsafe_b64encode(file_ref).decode().rstrip("=")
+
+
+
+# ─── Announcement Tracking ─────────────────────────────────────────────
+async def announce_title(title: str) -> bool:
+    """Return True if title not announced before, and record it."""
+    coll = get_db().announced_titles
+    normalized = title.lower().strip()
+    existing = await coll.find_one({"_id": normalized})
+    if existing:
+        return False
+    await coll.insert_one({"_id": normalized})
+    return True
 
 
 def unpack_new_file_id(new_file_id: str) -> Tuple[str, str]:

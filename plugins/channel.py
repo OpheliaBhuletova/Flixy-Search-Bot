@@ -1,8 +1,12 @@
+import asyncio
+
 from pyrogram import Client, filters
+
+from bot.utils.broadcast import new_movie_broadcast
 from pyrogram.types import Message
 
 from bot.config import settings
-from database.ia_filterdb import save_file
+from database.ia_filterdb import save_file, announce_title
 
 
 MEDIA_FILTER = filters.document | filters.video | filters.audio
@@ -29,4 +33,6 @@ async def channel_media_handler(client: Client, message: Message):
     media.file_type = file_type
     media.caption = message.caption
 
-    await save_file(media)
+    saved, reason, title = await save_file(media)
+    if saved and await announce_title(title):
+        asyncio.create_task(new_movie_broadcast(client, title))

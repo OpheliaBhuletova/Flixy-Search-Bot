@@ -2,6 +2,8 @@ import re
 import asyncio
 import logging
 
+from bot.utils.broadcast import new_movie_broadcast
+
 from pyrogram import Client, filters, enums
 from pyrogram.types import (
     InlineKeyboardMarkup,
@@ -19,7 +21,7 @@ from pyrogram.errors.exceptions.bad_request_400 import (
 
 from bot.config import settings
 from bot.utils.cache import RuntimeCache
-from database.ia_filterdb import save_file
+from database.ia_filterdb import save_file, announce_title
 
 logger = logging.getLogger(__name__)
 
@@ -261,9 +263,13 @@ async def index_files_to_db(
                 media.file_type = msg.media.value
                 media.caption = msg.caption
 
-                saved, reason = await save_file(media)
+                saved, reason, title = await save_file(media)
                 if saved:
                     total += 1
+                    # announce title only once and broadcast to users
+                    if await announce_title(title):
+                        # schedule broadcast without blocking indexing
+                        asyncio.create_task(new_movie_broadcast(client, title))
                 elif reason == 0:
                     duplicate += 1
                 else:
