@@ -241,14 +241,20 @@ class Bot(Client):
                             )
                             # schedule deletion after delete_after seconds
                             schedule_delete_message(app, sent.chat.id, sent.id, delay_seconds=delete_after)
-                        except PeerIdInvalid:
-                            # fallback to Bot API when session can't resolve the peer
-                            try:
-                                await botapi_send_message(app.bot_token, ch, msg_text)
-                            except Exception:
-                                logger.exception("Bot API also failed for ad to %s", ch)
-                        except Exception:
-                            logger.exception("Failed to send scheduled ad to %s", ch)
+                        except Exception as exc:
+                            # convert ValueError with peer message to same handling
+                            if isinstance(exc, ValueError) and "Peer id invalid" in str(exc):
+                                try:
+                                    await botapi_send_message(app.bot_token, ch, msg_text)
+                                except Exception:
+                                    logger.exception("Bot API also failed for ad to %s", ch)
+                            elif isinstance(exc, PeerIdInvalid):
+                                try:
+                                    await botapi_send_message(app.bot_token, ch, msg_text)
+                                except Exception:
+                                    logger.exception("Bot API also failed for ad to %s", ch)
+                            else:
+                                logger.exception("Failed to send scheduled ad to %s", ch)
                     await asyncio.sleep(interval)
 
             try:
