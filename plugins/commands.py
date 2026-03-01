@@ -110,6 +110,47 @@ async def set_startup_image(client: Client, message: Message):
         await message.reply(f"❌ Error: {str(e)}")
 
 
+@Client.on_message(filters.command("ad") & filters.user(settings.ADMINS) & filters.private)
+async def ad_toggle_handler(client: Client, message: Message):
+    """Turn periodic ad sending on or off (admin only).
+
+    Usage:
+      /ad on  - enable ads
+      /ad off - disable ads
+    """
+    if len(message.command) != 2:
+        return await message.reply("Usage: /ad <on|off>")
+
+    action = message.command[1].lower()
+    if action not in ("on", "off"):
+        return await message.reply("Usage: /ad <on|off>")
+
+    enable = action == "on"
+
+    try:
+        await db.set_ad_enabled(enable)
+        # update runtime cache so change takes effect immediately
+        RuntimeCache.ad_enabled = enable
+
+        await message.reply(f"✅ Ads {'enabled' if enable else 'disabled'}.")
+
+        # notify log channel
+        log_channel = getattr(settings, "LOG_CHANNEL", 0)
+        if log_channel:
+            try:
+                await client.send_message(
+                    log_channel,
+                    f"Ads have been {'enabled' if enable else 'disabled'} by admin <a href='tg://user?id={message.from_user.id}'>{message.from_user.first_name}</a>",
+                    parse_mode=enums.ParseMode.HTML,
+                )
+            except Exception:
+                logger.exception("Failed to notify LOG_CHANNEL about ad toggle")
+
+    except Exception as e:
+        logger.exception("Failed to set ad flag")
+        await message.reply(f"❌ Error updating ad setting: {e}")
+
+
 @Client.on_message(filters.command("start") & filters.incoming)
 async def start_handler(client: Client, message: Message):
     # ── GROUP START ──

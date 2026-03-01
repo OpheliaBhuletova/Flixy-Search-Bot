@@ -181,6 +181,12 @@ class Bot(Client):
         RuntimeCache.bot_name = me.first_name
         RuntimeCache.current = me.id
 
+        # load persisted ad flag into runtime cache (default: False)
+        try:
+            RuntimeCache.ad_enabled = await db.get_ad_enabled()
+        except Exception:
+            RuntimeCache.ad_enabled = False
+
         self.username = f"@{me.username}"
 
         logger.info("%s started with Pyrogram v%s as %s", me.first_name, __version__, self.username)
@@ -226,45 +232,54 @@ class Bot(Client):
                 interval = 6 * 3600
                 delete_after = 3 * 3600
                 while True:
-                    for ch in settings.AD_CHANNEL:
-                        try:
-                            # hardcoded ad message (HTML)
-                            msg_text = (
-                                "<b>🚀 Tired of Searching Everywhere for Movies?</b>\n\n"
-                                "🍿 Let <b>F L I X Y</b> do it for you.\n\n"
-                                "🔎 Smart Inline Search\n"
-                                "⚡ Lightning Fast Results\n"
-                                "🎬 Movies & Series in Seconds\n\n"
-                                "No complicated steps. Just type and get what you want.\n\n"
-                                "<i>Start now 👉 @FSrchBot</i>"
-                            )
-                            buttons = InlineKeyboardMarkup(
-                                [[InlineKeyboardButton("Try Flixy", url=f"https://t.me/{RuntimeCache.bot_username}")]]
-                            )
-                            sent = await app.send_message(
-                                ch,
-                                msg_text,
-                                parse_mode=enums.ParseMode.HTML,
-                                disable_web_page_preview=True,
-                                reply_markup=buttons,
-                            )
-                            # schedule deletion after delete_after seconds
-                            schedule_delete_message(app, sent.chat.id, sent.id, delay_seconds=delete_after)
-                        except Exception as exc:
-                            # if peer is invalid (ValueError from utils or PeerIdInvalid),
-                            # try sending via Bot API instead of logging an error.
-                            is_peer_error = (
-                                (isinstance(exc, ValueError) and "Peer id invalid" in str(exc))
-                                or isinstance(exc, PeerIdInvalid)
-                            )
-                            if is_peer_error:
-                                try:
-                                    await botapi_send_message(app.bot_token, ch, msg_text)
-                                    logger.info("Sent ad to %s using Bot API fallback", ch)
-                                except Exception:
-                                    logger.exception("Bot API also failed for ad to %s", ch)
-                            else:
-                                logger.exception("Failed to send scheduled ad to %s", ch)
+                    # refresh persisted flag at start of loop
+                    try:
+                        ad_enabled = await db.get_ad_enabled()
+                        RuntimeCache.ad_enabled = bool(ad_enabled)
+                    except Exception:
+                        ad_enabled = getattr(RuntimeCache, "ad_enabled", False)
+
+                    if ad_enabled:
+                        for ch in settings.AD_CHANNEL:
+                            try:
+                                # hardcoded ad message (HTML)
+                                msg_text = (
+                                    "<b>🚀 Tired of Searching Everywhere for Movies?</b>\n\n"
+                                    "🍿 Let <b>F L I X Y</b> do it for you.\n\n"
+                                    "🔎 Smart Inline Search\n"
+                                    "⚡ Lightning Fast Results\n"
+                                    "🎬 Movies & Series in Seconds\n\n"
+                                    "No complicated steps. Just type and get what you want.\n\n"
+                                    "<i>Start now 👉 @FSrchBot</i>"
+                                )
+                                buttons = InlineKeyboardMarkup(
+                                    [[InlineKeyboardButton("Try Flixy", url=f"https://t.me/{RuntimeCache.bot_username}" )]]
+                                )
+                                sent = await app.send_message(
+                                    ch,
+                                    msg_text,
+                                    parse_mode=enums.ParseMode.HTML,
+                                    disable_web_page_preview=True,
+                                    reply_markup=buttons,
+                                )
+                                # schedule deletion after delete_after seconds
+                                schedule_delete_message(app, sent.chat.id, sent.id, delay_seconds=delete_after)
+                            except Exception as exc:
+                                # if peer is invalid (ValueError from utils or PeerIdInvalid),
+                                # try sending via Bot API instead of logging an error.
+                                is_peer_error = (
+                                    (isinstance(exc, ValueError) and "Peer id invalid" in str(exc))
+                                    or isinstance(exc, PeerIdInvalid)
+                                )
+                                if is_peer_error:
+                                    try:
+                                        await botapi_send_message(app.bot_token, ch, msg_text)
+                                        logger.info("Sent ad to %s using Bot API fallback", ch)
+                                    except Exception:
+                                        logger.exception("Bot API also failed for ad to %s", ch)
+                                else:
+                                    logger.exception("Failed to send scheduled ad to %s", ch)
+
                     await asyncio.sleep(interval)
 
             try:

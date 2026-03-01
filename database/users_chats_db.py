@@ -179,6 +179,23 @@ class Database:
             {"$pull": {"file_ids": file_id}}
         )
 
+    # ─── Bot-wide settings helpers ───────────────────────────────────
+    async def set_ad_enabled(self, enabled: bool):
+        """Persist the ad enabled flag for the bot.
+
+        Stored in collection `bot_settings` with document id `ads_enabled`.
+        """
+        await self.db.bot_settings.update_one(
+            {"_id": "ads_enabled"},
+            {"$set": {"enabled": bool(enabled)}},
+            upsert=True,
+        )
+
+    async def get_ad_enabled(self) -> bool:
+        """Return True if ads are enabled in persistent storage, else False."""
+        doc = await self.db.bot_settings.find_one({"_id": "ads_enabled"})
+        return bool(doc and doc.get("enabled", False))
+
     # ─── Stats ───────────────────────────────────────────────────────────
     async def get_db_size(self):
         stats = await self.db.command("dbstats")

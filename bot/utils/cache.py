@@ -17,3 +17,4 @@ class RuntimeCache:
     bot_name: str | None = None
     startup_time: Any = None
     index_skip: int = 0
+    ad_enabled: bool = False
