@@ -207,6 +207,8 @@ class Bot(Client):
                     int(log_channel),
                     startup_msg,
                 )
+            except Exception:
+                logger.exception("Failed to send startup log to LOG_CHANNEL")
 
         # Start periodic ad sender if channels are configured
         if getattr(settings, "AD_CHANNEL", None):
@@ -247,8 +249,6 @@ class Bot(Client):
                 asyncio.create_task(_ad_sender(self))
             except Exception:
                 logger.exception("Failed to start ad sender task")
-            except Exception:
-                logger.exception("Failed to send startup message to LOG_CHANNEL")
 
         # Block forever so Koyeb does not scale down
         await asyncio.Event().wait()
