@@ -9,7 +9,7 @@ from typing import AsyncGenerator, Optional, Union
 import aiohttp
 from aiohttp import web
 from pyrogram import Client, __version__, idle, types, enums
-from pyrogram.errors import FloodWait
+from pyrogram.errors import FloodWait, PeerIdInvalid
 
 from bot.config import LOG_STR, settings
 from bot.utils.cache import RuntimeCache
@@ -241,6 +241,12 @@ class Bot(Client):
                             )
                             # schedule deletion after delete_after seconds
                             schedule_delete_message(app, sent.chat.id, sent.id, delay_seconds=delete_after)
+                        except PeerIdInvalid:
+                            # fallback to Bot API when session can't resolve the peer
+                            try:
+                                await botapi_send_message(app.bot_token, ch, msg_text)
+                            except Exception:
+                                logger.exception("Bot API also failed for ad to %s", ch)
                         except Exception:
                             logger.exception("Failed to send scheduled ad to %s", ch)
                     await asyncio.sleep(interval)
