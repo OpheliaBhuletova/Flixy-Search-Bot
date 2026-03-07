@@ -8,6 +8,7 @@ from pyrogram.types import (
     InlineKeyboardMarkup,
     InlineKeyboardButton,
     CallbackQuery,
+    Message,
 )
 from pyrogram.errors.exceptions.bad_request_400 import (
     UserNotParticipant,
