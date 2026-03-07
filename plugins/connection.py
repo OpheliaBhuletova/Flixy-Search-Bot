@@ -25,6 +25,7 @@ async def connect_handler(client: Client, message: Message):
 
     chat_type = message.chat.type
 
+    # In PM, /connect requires a group ID argument.
     if chat_type == enums.ChatType.PRIVATE:
         try:
             _, group_id = message.text.split(" ", 1)
@@ -69,10 +70,32 @@ async def connect_handler(client: Client, message: Message):
         chat = await client.get_chat(group_id)
         title = chat.title
 
-        connected = await add_connection(str(group_id), str(user_id))
-        if connected:
+        await add_connection(str(group_id), str(user_id))
+
+        # Persist in the main chat DB so /groupchats shows it
+        try:
+            await db.add_chat(group_id, title)
+        except Exception:
+            logger.exception("Failed to add connected chat to main DB")
+
+        # Log to LOG_CHANNEL when the bot is connected to a group
+        log_channel = getattr(settings, "LOG_CHANNEL", 0)
+        if log_channel:
+            try:
+                user_link = f"<a href='tg://user?id={user_id}'>{message.from_user.first_name}</a>"
+                log_msg = (
+                    f"🔌 <b>Group Connected</b>\n\n"
+                    f"<b>Group:</b> {title} (<code>{group_id}</code>)\n"
+                    f"<b>Connected By:</b> {user_link}"
+                )
+                await client.send_message(log_channel, log_msg, parse_mode=enums.ParseMode.HTML)
+            except Exception:
+                logger.exception("Failed to send group connect notification to LOG_CHANNEL")
+
+        # Response behavior differs between group and PM
+        if chat_type == enums.ChatType.PRIVATE:
             await message.reply_text(
-                f"Successfully connected to **{title}**.\n\n"
+                f"Connected to **{title}**!\n\n"
                 "Here are the main group commands you can use in PM:\n"
                 "• `/filter <keyword>` — add a new filter (reply to a message or provide text)\n"
                 "• `/filters` — list filters\n"
@@ -85,47 +108,6 @@ async def connect_handler(client: Client, message: Message):
                 parse_mode=enums.ParseMode.MARKDOWN,
             )
 
-            # Persist in the main chat DB so /chats shows it
-            try:
-                await db.add_chat(group_id, title)
-            except Exception:
-                logger.exception("Failed to add connected chat to main DB")
-
-            # Log to LOG_CHANNEL when the bot is connected to a group
-            log_channel = getattr(settings, "LOG_CHANNEL", 0)
-            if log_channel:
-                try:
-                    user_link = f"<a href='tg://user?id={user_id}'>{message.from_user.first_name}</a>"
-                    log_msg = (
-                        f"🔌 <b>Group Connected</b>\n\n"
-                        f"<b>Group:</b> {title} (<code>{group_id}</code>)\n"
-                        f"<b>Connected By:</b> {user_link}"
-                    )
-                    await client.send_message(log_channel, log_msg, parse_mode=enums.ParseMode.HTML)
-                except Exception:
-                    logger.exception("Failed to send group connect notification to LOG_CHANNEL")
-
-            if chat_type != enums.ChatType.PRIVATE:
-                await client.send_message(
-                    user_id,
-                    (
-                        f"Connected to **{title}**!\n\n"
-                        "Here are the main group commands you can use in PM:\n"
-                        "• `/filter <keyword>` — add a new filter (reply to a message or provide text)\n"
-                        "• `/filters` — list filters\n"
-                        "• `/delete <keyword>` / `/del <keyword>` — remove a filter\n"
-                        "• `/delall` — remove all filters\n"
-                        "• `/disconnect` — unlink this group\n"
-                        "• `/connections` — list your linked groups\n"
-                        "• `/groupchats` — show groups stored in DB\n"
-                    ),
-                    parse_mode=enums.ParseMode.MARKDOWN,
-                )
-        else:
-            await message.reply_text(
-                "You're already connected to this chat!",
-                quote=True,
-            )
     except Exception as e:
         logger.exception(e)
         await message.reply_text(
@@ -142,26 +124,47 @@ async def disconnect_handler(client: Client, message: Message):
             f"You are an anonymous admin. Use /connect {message.chat.id} in PM"
         )
 
+    # Determine which group to disconnect.
     if message.chat.type == enums.ChatType.PRIVATE:
-        return await message.reply_text(
-            "Use /connections to view or disconnect from groups.",
-            quote=True,
-        )
+        # Allow /disconnect <group_id> or just /disconnect to use the active connection.
+        group_id = None
+        if len(message.command) > 1:
+            group_id = message.command[1]
+        else:
+            group_id = await active_connection(str(user_id))
+            if not group_id:
+                return await message.reply_text(
+                    "No active connection found. Use /connections to see linked groups.",
+                    quote=True,
+                )
+    else:
+        group_id = message.chat.id
 
-    group_id = message.chat.id
+    # Determine chat title for better confirmation messages
+    chat_title = None
+    try:
+        chat = await client.get_chat(int(group_id))
+        chat_title = chat.title or f"Group {group_id}"
+    except Exception:
+        chat_title = f"Group {group_id}"
 
-    member = await client.get_chat_member(group_id, user_id)
-    if (
-        member.status not in (enums.ChatMemberStatus.ADMINISTRATOR, enums.ChatMemberStatus.OWNER)
-        and str(user_id) not in map(str, settings.ADMINS)
-    ):
-        return
+    try:
+        member = await client.get_chat_member(group_id, user_id)
+        if (
+            member.status not in (enums.ChatMemberStatus.ADMINISTRATOR, enums.ChatMemberStatus.OWNER)
+            and str(user_id) not in map(str, settings.ADMINS)
+        ):
+            return
+    except Exception:
+        # If this fails, still attempt to remove the connection record.
+        pass
 
     removed = await delete_connection(str(user_id), str(group_id))
     if removed:
         await message.reply_text(
-            "Successfully disconnected from this chat.",
+            f"Successfully disconnected from **{chat_title}**.",
             quote=True,
+            parse_mode=enums.ParseMode.MARKDOWN,
         )
     else:
         await message.reply_text(
@@ -199,14 +202,9 @@ async def connections_handler(client: Client, message: Message):
         except Exception:
             continue
 
-    if buttons:
-        await message.reply_text(
-            "Your connected groups:\n\n",
-            reply_markup=InlineKeyboardMarkup(buttons),
-            quote=True,
-        )
-    else:
-        await message.reply_text(
-            "There are no active connections.\nConnect to a group first.",
-            quote=True,
-        )
+    # always show connected groups regardless of exception retrieving titles
+    await message.reply_text(
+        "Your connected groups:\n\n",
+        reply_markup=InlineKeyboardMarkup(buttons),
+        quote=True,
+    )
