@@ -103,7 +103,8 @@ async def connect_handler(client: Client, message: Message):
                 "• `/delall` — remove all filters\n"
                 "• `/disconnect` — unlink this group\n"
                 "• `/connections` — list your linked groups\n"
-                "• `/groupchats` — show groups stored in DB\n",
+                "• `/groupchats` — show groups stored in DB\n"
+                "• `/purge` — delete messages from a replied message to newest\n",
                 quote=True,
                 parse_mode=enums.ParseMode.MARKDOWN,
             )
