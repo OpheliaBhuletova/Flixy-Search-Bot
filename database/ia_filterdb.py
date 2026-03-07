@@ -161,13 +161,59 @@ def encode_file_ref(file_ref: bytes) -> str:
 
 
 # ─── Announcement Tracking ─────────────────────────────────────────────
+def _announcement_key(title: str) -> str:
+    """Generate a stable key for title announcement tracking.
+
+    The bot only broadcasts a given movie once, even if multiple versions
+    of the same movie (different quality/size/etc.) are indexed.
+
+    To do that, we only use the "Name (Year)" part of the title when
+    available (e.g. "Subedaar (2026)").
+    """
+
+    if not title:
+        return ""
+
+    title = title.strip()
+    match = re.search(r"\(\s*\d{4}\s*\)", title)
+    if match:
+        key = title[: match.end()]
+    else:
+        key = title
+
+    # Normalize whitespace/case for stable comparisons.
+    key = re.sub(r"\s+", " ", key).lower().strip()
+    return key
+
+
 async def announce_title(title: str) -> bool:
-    """Return True if title not announced before, and record it."""
+    """Return True if title not announced before, and record it.
+
+    The bot uses a simplified key (name + year) for tracking announcements.
+    This helps avoid re-broadcasting the same movie when different
+    versions/qualities are indexed.
+
+    For backwards-compatibility, we also consider the legacy full-title key
+    used in past versions.
+    """
     coll = get_db().announced_titles
-    normalized = title.lower().strip()
-    existing = await coll.find_one({"_id": normalized})
-    if existing:
+    normalized = _announcement_key(title)
+    legacy = title.strip()
+
+    # Case-insensitive match to handle existing entries with different casing.
+    normalized_query = {"_id": {"$regex": f"^{re.escape(normalized)}$", "$options": "i"}}
+    legacy_query = {"_id": {"$regex": f"^{re.escape(legacy)}$", "$options": "i"}}
+
+    # If already announced under the normalized key in any case variant, skip.
+    if await coll.find_one(normalized_query):
         return False
+
+    # Backwards-compatibility: if an older entry exists under the full title,
+    # consider it already announced and keep the new normalized key too.
+    if normalized != legacy and await coll.find_one(legacy_query):
+        await coll.insert_one({"_id": normalized})
+        return False
+
     await coll.insert_one({"_id": normalized})
     return True
 

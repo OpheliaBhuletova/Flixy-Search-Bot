@@ -250,7 +250,6 @@ class Bot(Client):
                                     "⚡ Lightning Fast Results\n"
                                     "🎬 Movies & Series in Seconds\n\n"
                                     "No complicated steps. Just type and get what you want.\n\n"
-                                    "<i>Start now 👉 @FSrchBot</i>"
                                 )
                                 buttons = InlineKeyboardMarkup(
                                     [[InlineKeyboardButton("Try Flixy", url=f"https://t.me/{RuntimeCache.bot_username}" )]]

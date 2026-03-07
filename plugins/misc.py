@@ -114,6 +114,65 @@ async def user_info_handler(client: Client, message):
     await status.delete()
 
 
+@Client.on_message(filters.command("purge") & filters.group)
+async def purge_handler(client: Client, message: Message):
+    """Delete all messages from the replied message up to the latest one."""
+    if not message.reply_to_message:
+        return await message.reply_text(
+            "Reply to a message to start the purge from.",
+            quote=True,
+        )
+
+    user_id = message.from_user.id if message.from_user else None
+    if not user_id:
+        return
+
+    try:
+        member = await client.get_chat_member(message.chat.id, user_id)
+    except Exception:
+        return
+
+    if (
+        member.status not in (enums.ChatMemberStatus.ADMINISTRATOR, enums.ChatMemberStatus.OWNER)
+        and str(user_id) not in map(str, settings.ADMINS)
+    ):
+        return
+
+    start_id = message.reply_to_message.message_id
+    chat_id = message.chat.id
+
+    deleted = 0
+    batch = []
+
+    async for msg in client.iter_history(chat_id):
+        if msg.message_id < start_id:
+            break
+        batch.append(msg.message_id)
+        if len(batch) >= 100:
+            try:
+                await client.delete_messages(chat_id, batch)
+                deleted += len(batch)
+            except Exception:
+                pass
+            batch = []
+
+    if batch:
+        try:
+            await client.delete_messages(chat_id, batch)
+            deleted += len(batch)
+        except Exception:
+            pass
+
+    try:
+        sent = await message.reply_text(
+            f"Purged {deleted} messages (from replied message to latest).",
+            quote=True,
+        )
+        schedule_delete_message(client, sent.chat.id, sent.id, delay_seconds=20)
+    except Exception:
+        pass
+
+
 @Client.on_message(filters.command(["imdb", "search"]))
 async def imdb_search_handler(client: Client, message):
     if len(message.command) < 2:

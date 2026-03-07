@@ -326,9 +326,9 @@ async def list_users_handler(client: Client, message):
             schedule_delete_message(client, sent.chat.id, sent.id)
 
 
-@Client.on_message(filters.command(["chats", "channels"]) & filters.user(settings.ADMINS))
+@Client.on_message(filters.command(["groupchats", "chats", "channels"]) & filters.user(settings.ADMINS))
 async def list_chats_handler(client: Client, message):
-    cmd = message.command[0].lower() if message.command else "chats"
+    cmd = message.command[0].lower() if message.command else "groupchats"
     msg = await message.reply("Fetching...")
 
     if cmd == "channels":
@@ -370,7 +370,7 @@ async def list_chats_handler(client: Client, message):
                 schedule_delete_message(client, sent.chat.id, sent.id)
         return
 
-    # default: /chats — list groups saved in DB via /connect
+    # default: /groupchats (alias: /chats) — list groups saved in DB via /connect
     total_chats = await db.total_chat_count()
     if total_chats == 0:
         return await msg.edit(

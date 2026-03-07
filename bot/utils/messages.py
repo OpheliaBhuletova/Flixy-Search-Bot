@@ -191,7 +191,7 @@ Restricted commands for bot administrators.
 • `/stats` — database statistics  
 • `/delete` — remove a file from database  
 • `/users` — list bot users  
-• `/chats` — list connected chats  
+• `/groupchats` — list connected group chats  
 • `/leave` — leave a chat  
 • `/disable` — disable a chat  
 • `/ban` — ban a user  

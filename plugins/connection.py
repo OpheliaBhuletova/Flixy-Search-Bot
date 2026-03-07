@@ -10,6 +10,7 @@ from database.connections_mdb import (
     if_active,
     delete_connection,
 )
+from database.users_chats_db import db
 
 logger = logging.getLogger(__name__)
 
@@ -71,15 +72,53 @@ async def connect_handler(client: Client, message: Message):
         connected = await add_connection(str(group_id), str(user_id))
         if connected:
             await message.reply_text(
-                f"Successfully connected to **{title}**.\n"
-                "Now you can manage your group from my PM!",
+                f"Successfully connected to **{title}**.\n\n"
+                "Here are the main group commands you can use in PM:\n"
+                "• `/filter <keyword>` — add a new filter (reply to a message or provide text)\n"
+                "• `/filters` — list filters\n"
+                "• `/delete <keyword>` / `/del <keyword>` — remove a filter\n"
+                "• `/delall` — remove all filters\n"
+                "• `/disconnect` — unlink this group\n"
+                "• `/connections` — list your linked groups\n"
+                "• `/groupchats` — show groups stored in DB\n",
                 quote=True,
                 parse_mode=enums.ParseMode.MARKDOWN,
             )
+
+            # Persist in the main chat DB so /chats shows it
+            try:
+                await db.add_chat(group_id, title)
+            except Exception:
+                logger.exception("Failed to add connected chat to main DB")
+
+            # Log to LOG_CHANNEL when the bot is connected to a group
+            log_channel = getattr(settings, "LOG_CHANNEL", 0)
+            if log_channel:
+                try:
+                    user_link = f"<a href='tg://user?id={user_id}'>{message.from_user.first_name}</a>"
+                    log_msg = (
+                        f"🔌 <b>Group Connected</b>\n\n"
+                        f"<b>Group:</b> {title} (<code>{group_id}</code>)\n"
+                        f"<b>Connected By:</b> {user_link}"
+                    )
+                    await client.send_message(log_channel, log_msg, parse_mode=enums.ParseMode.HTML)
+                except Exception:
+                    logger.exception("Failed to send group connect notification to LOG_CHANNEL")
+
             if chat_type != enums.ChatType.PRIVATE:
                 await client.send_message(
                     user_id,
-                    f"Connected to **{title}**!",
+                    (
+                        f"Connected to **{title}**!\n\n"
+                        "Here are the main group commands you can use in PM:\n"
+                        "• `/filter <keyword>` — add a new filter (reply to a message or provide text)\n"
+                        "• `/filters` — list filters\n"
+                        "• `/delete <keyword>` / `/del <keyword>` — remove a filter\n"
+                        "• `/delall` — remove all filters\n"
+                        "• `/disconnect` — unlink this group\n"
+                        "• `/connections` — list your linked groups\n"
+                        "• `/groupchats` — show groups stored in DB\n"
+                    ),
                     parse_mode=enums.ParseMode.MARKDOWN,
                 )
         else:
