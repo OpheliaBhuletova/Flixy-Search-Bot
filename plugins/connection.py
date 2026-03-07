@@ -191,12 +191,13 @@ async def connections_handler(client: Client, message: Message):
         try:
             chat = await client.get_chat(int(gid))
             active = await if_active(str(user_id), str(gid))
-            status = " - ACTIVE" if active else ""
+            status_text = " - ACTIVE" if active else ""
+            status_flag = "active" if active else "inactive"
             buttons.append(
                 [
                     InlineKeyboardButton(
-                        text=f"{chat.title}{status}",
-                        callback_data=f"groupcb:{gid}:{status}",
+                        text=f"{chat.title}{status_text}",
+                        callback_data=f"groupcb:{gid}:{status_flag}",
                     )
                 ]
             )
@@ -204,8 +205,17 @@ async def connections_handler(client: Client, message: Message):
             continue
 
     # always show connected groups regardless of exception retrieving titles
-    await message.reply_text(
-        "Your connected groups:\n\n",
-        reply_markup=InlineKeyboardMarkup(buttons),
-        quote=True,
-    )
+    if buttons:
+        await message.reply_text(
+            "Your connected groups:\n\n",
+            reply_markup=InlineKeyboardMarkup(buttons),
+            quote=True,
+        )
+    else:
+        # If we couldn't build a valid keyboard (e.g., all get_chat calls failed),
+        # fall back to a plain-text response to avoid invalid reply markup.
+        groups_text = "\n".join(f"- {gid}" for gid in group_ids)
+        await message.reply_text(
+            f"Your connected groups:\n\n{groups_text}",
+            quote=True,
+        )
