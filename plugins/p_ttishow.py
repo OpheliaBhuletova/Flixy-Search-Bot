@@ -10,6 +10,7 @@ from pyrogram.errors.exceptions.bad_request_400 import (
 
 from bot.config import settings
 from database.users_chats_db import db
+from database.connections_mdb import all_connections
 from database.ia_filterdb import Media
 from bot.utils.cache import RuntimeCache
 from bot.utils.helpers import get_size, get_settings, schedule_delete_message
@@ -370,9 +371,11 @@ async def list_chats_handler(client: Client, message):
                 schedule_delete_message(client, sent.chat.id, sent.id)
         return
 
-    # default: /groupchats (alias: /chats) — list groups saved in DB via /connect
-    total_chats = await db.total_chat_count()
-    if total_chats == 0:
+    # default: /groupchats (alias: /chats) — list groups connected via /connect
+    user_id = message.from_user.id
+    group_ids = await all_connections(str(user_id))
+
+    if not group_ids:
         return await msg.edit(
             "📭 <b>No connected groups</b>\n\n"
             "You haven't connected any groups yet. Go to a group where you're admin and use <code>/connect {group_id}</code> in the bot's PM.",
@@ -380,14 +383,17 @@ async def list_chats_handler(client: Client, message):
         )
 
     await msg.edit_text("Fetching chats...")
-    chats = await db.get_all_chats()
     text = "Chats:\n\n"
 
-    async for chat in chats:
-        text += f"Title: {chat['title']} | ID: {chat['id']}"
-        if chat["chat_status"]["is_disabled"]:
-            text += " (Disabled)"
-        text += "\n"
+    for gid in group_ids:
+        try:
+            chat_info = await get_chat_info(client, int(gid))
+            title = chat_info.get("title") or chat_info.get("username") or f"Group {gid}"
+            cid = chat_info.get("id", gid)
+        except Exception:
+            title = f"Group {gid}"
+            cid = gid
+        text += f"Title: {title} | ID: {cid}\n"
 
     try:
         await msg.edit(text)
