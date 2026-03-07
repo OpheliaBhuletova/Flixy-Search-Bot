@@ -1,4 +1,5 @@
 import os
+import html
 import logging
 import random
 from datetime import datetime
@@ -21,7 +22,7 @@ from bot.config import settings
 from bot.utils.helpers import extract_user, get_file_id, last_online
 from bot.utils.cache import RuntimeCache
 from bot.utils.messages import Texts
-from bot.services.imdb_service import get_poster
+from bot.services.imdb_service import get_imdb_info, get_poster
 
 logger = logging.getLogger(__name__)
 
@@ -202,10 +203,52 @@ async def imdb_search_handler(client: Client, message):
     )
 
 
+@Client.on_message(filters.command("imdbinfo"))
+async def imdb_info_handler(client: Client, message: Message):
+    if len(message.command) < 2:
+        return await message.reply(
+            "<b>Usage:</b> /imdbinfo <movie name> — or — /imdbinfo <tt1234567>\n\n"
+            "<i>Example:</i> /imdbinfo Khajuraho Dreams\n"
+            "<i>Example:</i> /imdbinfo tt11322908",
+            quote=True,
+            parse_mode=enums.ParseMode.HTML,
+        )
+
+    query = message.text.split(None, 1)[1]
+    status = await message.reply("Searching IMDb...")
+
+    imdb = await get_imdb_info(query)
+    if not imdb:
+        return await status.edit(f"No IMDb results found for <b>{html.escape(query)}</b>.")
+
+    # Sanitize all user-facing strings to avoid HTML parsing issues.
+    title = html.escape(str(imdb.get("title") or "N/A"))
+    aka = html.escape(str(imdb.get("aka") or "N/A"))
+    plot = html.escape(str(imdb.get("plot") or "N/A"))
+
+    url = html.escape(str(imdb.get('url') or ''))
+    msg = (
+        f"<b>Movie:</b> {title} (<a href=\"{url}\">{url}</a>) [{imdb.get('year')}]\n"
+        f"<i>Also Known As:</i> {aka}\n"
+        f"<b>Rating ⭐️:</b> {imdb.get('rating')} / 10\n"
+        f"(<code>{imdb.get('rating')} based on {imdb.get('votes')} user ratings</code>) |  | <code>{imdb.get('runtime')}</code> |\n"
+        f"<b>Release Info:</b> {imdb.get('release_date')} ({imdb.get('release_country')}) ({imdb.get('release_link')})\n"
+        f"<b>Genre:</b> {imdb.get('genres_line')}\n"
+        f"<b>Language:</b> {imdb.get('languages_line')}\n"
+        f"<b>Country of Origin:</b> {imdb.get('country_line')}\n"
+        f"<b>Story Line:</b> {plot}\n"
+        f"<b>Directors</b>  {imdb.get('directors_line')}\n"
+        f"<b>Writers</b>  {imdb.get('writers_line')}\n"
+        f"<b>Stars</b>  {imdb.get('stars_line')}"
+    )
+
+    await status.edit(msg, parse_mode=enums.ParseMode.HTML, disable_web_page_preview=True)
+
+
 @Client.on_callback_query(filters.regex("^imdb#"))
 async def imdb_callback_handler(client: Client, callback: CallbackQuery):
     _, movie_id = callback.data.split("#", 1)
-    imdb = await get_poster(movie_id, id=True)
+    imdb = await get_poster(movie_id, imdb_id=True)
 
     if not imdb:
         return await callback.answer("No data found.", show_alert=True)
