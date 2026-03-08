@@ -27,6 +27,19 @@ from bot.services.metadata_service import get_imdb_info, get_poster
 
 logger = logging.getLogger(__name__)
 
+async def animate_search_message(message):
+    dots = ["", ".", "..", "..."]
+    i = 0
+
+    try:
+        while True:
+            text = f"Searching IMDb{dots[i % 4]}"
+            await message.edit(text)
+            await asyncio.sleep(0.5)
+            i += 1
+    except asyncio.CancelledError:
+        pass
+
 @Client.on_message(filters.command("id"))
 async def show_id_handler(client: Client, message):
     chat_type = message.chat.type
@@ -215,9 +228,13 @@ async def imdb_info_handler(client: Client, message: Message):
         )
 
     query = message.text.split(None, 1)[1]
-    status = await message.reply("Searching IMDb...")
+    status = await message.reply("Searching IMDb")
+
+    animation = asyncio.create_task(animate_search_message(status))
 
     imdb = await get_imdb_info(query)
+
+    animation.cancel()    
     if not imdb:
         return await status.edit(
             f"No IMDb results found for <b>{html.escape(query)}</b>.",
