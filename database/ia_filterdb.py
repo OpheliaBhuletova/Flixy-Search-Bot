@@ -72,19 +72,16 @@ async def save_file(media) -> Tuple[bool, int, str]:
         )
     except ValidationError:
         logger.exception("Validation error while saving media")
-        return False, 2
+        return False, 2, clean_title or file_name
 
     try:
         await file.commit()
-        return True, 1, file_name
-
+        return True, 1, clean_title or file_name
     except DuplicateKeyError:
-        return False, 0, file_name
-
+        return False, 0, clean_title or file_name
     except Exception:
         logger.exception("Unexpected error while saving media")
-        return False, 2, file_name
-
+        return False, 2, clean_title or file_name
 
 # ─── Search Engine ───────────────────────────────────────────────────────
 async def get_search_results(
