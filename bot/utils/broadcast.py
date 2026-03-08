@@ -7,7 +7,7 @@ from pyrogram.errors import (
     PeerIdInvalid,
     FloodWait,
 )
-from pyrogram.types import Message
+from pyrogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton
 from bot.utils.cache import RuntimeCache
 from bot.config import settings
 from database.users_chats_db import db
@@ -44,20 +44,23 @@ async def broadcast_messages(user_id: int, message: Message):
         return False, "Error"
 
 async def new_movie_broadcast(client: Client, title: str):
-    """Notify all users about a new movie title.
-
-    This function iterates through the user list and sends a simple HTML
-    message containing the *title*.  It also logs a short report to the
-    configured log channel (if any).  Duplicate titles are prevented by
-    checking the database before this function is called.
-    """
+    """Notify all users about a newly indexed movie title."""
     users = await db.get_all_users()
-    # message text mirrors the style of the regular ad but is movie-specific
+
     msg_text = (
-        f"🎬 <b>New movie added:</b> <i>{title}</i>\n\n"
-        f"Use inline search (<code>@{RuntimeCache.bot_username} {title}</code>) "
-        "or message me for details."
+        "🎬 <b>New Movie Added</b>\n\n"
+        f"<b>{title}</b>\n\n"
+        "🔎 <b>Search instantly:</b>\n"
+        f"Use inline search — <code>@{RuntimeCache.bot_username} {title}</code>\n\n"
+        "📩 <b>Or send me the movie name in PM</b> to get the file."
     )
+
+    buttons = [[
+        InlineKeyboardButton(
+            "🔎 Search Instantly",
+            switch_inline_query_current_chat=title,
+        )
+    ]]
 
     total = await db.total_users_count()
     done = success = blocked = deleted = failed = 0
@@ -70,6 +73,7 @@ async def new_movie_broadcast(client: Client, title: str):
                 msg_text,
                 parse_mode=enums.ParseMode.HTML,
                 disable_web_page_preview=True,
+                reply_markup=InlineKeyboardMarkup(buttons),
             )
             success += 1
         except InputUserDeactivated:
@@ -85,22 +89,24 @@ async def new_movie_broadcast(client: Client, title: str):
             failed += 1
         finally:
             done += 1
-            # gentle pacing to avoid floods
             await asyncio.sleep(1)
 
-    # send a short report to the log channel if configured
     log_channel = getattr(settings, "LOG_CHANNEL", 0)
     if log_channel:
         try:
             report = (
-                f"<b> Movie Broadcast Report</b>\n\n"
-                f"Title: <code>{title}</code>\n"
-                f"Total: {total}\n"
-                f"Delivered: {success}\n"
-                f"Blocked: {blocked}\n"
-                f"Deleted: {deleted}\n"
-                f"Failed: {failed}"
+                "🎬 <b>Movie Broadcast Report</b>\n\n"
+                f"<b>Title:</b> <code>{title}</code>\n"
+                f"<b>Total:</b> {total}\n"
+                f"<b>Delivered:</b> {success}\n"
+                f"<b>Blocked:</b> {blocked}\n"
+                f"<b>Deleted:</b> {deleted}\n"
+                f"<b>Failed:</b> {failed}"
             )
-            await client.send_message(log_channel, report, parse_mode=enums.ParseMode.HTML)
+            await client.send_message(
+                log_channel,
+                report,
+                parse_mode=enums.ParseMode.HTML,
+            )
         except Exception:
             logger.exception("Failed to send movie broadcast report")
