@@ -3,6 +3,7 @@ import html
 import logging
 import random
 from datetime import datetime
+import asyncio
 
 from pyrogram import Client, filters, enums
 from pyrogram.types import (
@@ -25,10 +26,6 @@ from bot.utils.messages import Texts
 from bot.services.metadata_service import get_imdb_info, get_poster
 
 logger = logging.getLogger(__name__)
-
-@property
-def METADATA_TEMPLATE(self) -> str:
-    return self.IMDB_TEMPLATE
 
 @Client.on_message(filters.command("id"))
 async def show_id_handler(client: Client, message):
@@ -222,31 +219,31 @@ async def imdb_info_handler(client: Client, message: Message):
 
     imdb = await get_imdb_info(query)
     if not imdb:
-        return await status.edit(f"No IMDb results found for <b>{html.escape(query)}</b>.")
+        return await status.edit(
+            f"No IMDb results found for <b>{html.escape(query)}</b>.",
+            parse_mode=enums.ParseMode.HTML,
+        )
 
-    # Sanitize all user-facing strings to avoid HTML parsing issues.
-    title = html.escape(str(imdb.get("title") or "N/A"))
-    aka = html.escape(str(imdb.get("aka") or "N/A"))
-    plot = html.escape(str(imdb.get("plot") or "N/A"))
-
-    url = html.escape(str(imdb.get('url') or ''))
     msg = (
-        f"<b>Movie:</b> {title} (<a href=\"{url}\">{url}</a>) [{imdb.get('year')}]\n"
-        f"<i>Also Known As:</i> {aka}\n"
-        f"<b>Rating ⭐️:</b> {imdb.get('rating')} / 10\n"
-        f"(<code>{imdb.get('rating')} based on {imdb.get('votes')} user ratings</code>) |  | <code>{imdb.get('runtime')}</code> |\n"
-        f"<b>Release Info:</b> {imdb.get('release_date')} ({imdb.get('release_country')}) ({imdb.get('release_link')})\n"
-        f"<b>Genre:</b> {imdb.get('genres_line')}\n"
-        f"<b>Language:</b> {imdb.get('languages_line')}\n"
-        f"<b>Country of Origin:</b> {imdb.get('country_line')}\n"
-        f"<b>Story Line:</b> {plot}\n"
-        f"<b>Directors</b>  {imdb.get('directors_line')}\n"
-        f"<b>Writers</b>  {imdb.get('writers_line')}\n"
-        f"<b>Stars</b>  {imdb.get('stars_line')}"
+        f"<b>Movie:</b> <a href='{imdb['url']}'>{imdb['title']}</a> [{imdb['year']}]\n"
+        f"<b>Also Known As:</b> {imdb['aka']}\n"
+        f"<b>Rating ⭐️:</b> {imdb['rating']} / 10\n"
+        f"({imdb['rating']} based on {imdb['votes']} user ratings) | {imdb['runtime']} |\n"
+        f"<b>Release Info:</b> <a href='{imdb['release_link']}'>{imdb['release_date']} ({imdb['release_country']})</a>\n"
+        f"<b>Genre:</b> {imdb['genres_line']}\n"
+        f"<b>Language:</b> {imdb['languages_line']}\n"
+        f"<b>Country of Origin:</b> {imdb['country_line']}\n"
+        f"<b>Story Line:</b> {imdb['plot']}\n"
+        f"<b>Directors:</b> {imdb['directors_line']}\n"
+        f"<b>Writers:</b> {imdb['writers_line']}\n"
+        f"<b>Stars:</b> {imdb['stars_line']}"
     )
 
-    await status.edit(msg, parse_mode=enums.ParseMode.HTML, disable_web_page_preview=True)
-
+    await status.edit(
+        msg,
+        parse_mode=enums.ParseMode.HTML,
+        disable_web_page_preview=True,
+    )
 
 @Client.on_callback_query(filters.regex("^imdb#"))
 async def imdb_callback_handler(client: Client, callback: CallbackQuery):

@@ -1,8 +1,10 @@
 import re
+import time
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
 import httpx
+import asyncio
 
 from bot.config import settings
 
@@ -50,6 +52,13 @@ COUNTRY_FLAGS = {
     "Mexico": "",
 }
 
+CACHE_TTL_SECONDS = 60 * 60 * 6  # 6 hours
+PERSON_CACHE_TTL_SECONDS = 60 * 60 * 24  # 24 hours
+
+_tmdb_cache: Dict[str, tuple[float, dict]] = {}
+_person_imdb_cache: Dict[int, tuple[float, Optional[str]]] = {}
+
+_MISSING = object()
 
 def list_to_str(data):
     if not data:
@@ -58,6 +67,29 @@ def list_to_str(data):
         data = data[: int(settings.MAX_LIST_ELM)]
     return ", ".join(map(str, data))
 
+def _cache_get(cache: dict, key):
+    item = cache.get(key)
+    if item is None:
+        return _MISSING
+
+    expires_at, value = item
+    if expires_at < time.time():
+        cache.pop(key, None)
+        return _MISSING
+
+    return value
+
+
+def _cache_set(cache: dict, key, value, ttl: int):
+    cache[key] = (time.time() + ttl, value)
+
+
+def _make_cache_key(endpoint: str, params: Optional[dict]) -> str:
+    params = params or {}
+    parts = [endpoint]
+    for k in sorted(params):
+        parts.append(f"{k}={params[k]}")
+    return "|".join(parts)
 
 def _genre_emoji(genre: str) -> str:
     return GENRE_EMOJI.get(genre, "")
@@ -115,6 +147,12 @@ def _extract_year_and_title(query: str) -> tuple[str, Optional[str]]:
     title = query.replace(year, "").strip() if year else query
     return title, year
 
+def _cleanup_cache(cache: dict):
+    now = time.time()
+    expired = [k for k, (expires_at, _) in cache.items() if expires_at < now]
+    for k in expired:
+        cache.pop(k, None)
+
 
 async def _tmdb_request(endpoint: str, params: Optional[dict] = None) -> Optional[dict]:
     if not settings.TMDB_API_KEY:
@@ -123,13 +161,26 @@ async def _tmdb_request(endpoint: str, params: Optional[dict] = None) -> Optiona
     params = params or {}
     params["api_key"] = settings.TMDB_API_KEY
 
+    if len(_tmdb_cache) > 1000:
+        _cleanup_cache(_tmdb_cache)
+
+    if len(_person_imdb_cache) > 2000:
+        _cleanup_cache(_person_imdb_cache)
+
+    cache_key = _make_cache_key(endpoint, params)
+    cached = _cache_get(_tmdb_cache, cache_key)
+    if cached is not _MISSING:
+        return cached
+
     url = f"https://api.themoviedb.org/3/{endpoint.lstrip('/')}"
 
     try:
         async with httpx.AsyncClient(timeout=15) as client:
             response = await client.get(url, params=params)
             response.raise_for_status()
-            return response.json()
+            data = response.json()
+            _cache_set(_tmdb_cache, cache_key, data, CACHE_TTL_SECONDS)
+            return data
     except Exception:
         return None
 
@@ -226,36 +277,87 @@ def _get_languages(details: dict) -> List[str]:
     return [original.upper()] if original else []
 
 
-def _get_directors(details: dict, media_type: str) -> List[str]:
+def _get_director_people(details: dict, media_type: str) -> List[dict]:
     crew = (details.get("credits") or {}).get("crew") or []
 
     if media_type == "movie":
-        names = [p.get("name") for p in crew if p.get("job") == "Director" and p.get("name")]
-    else:
-        created_by = details.get("created_by") or []
-        names = [p.get("name") for p in created_by if p.get("name")]
+        return [
+            {"id": p.get("id"), "name": p.get("name")}
+            for p in crew
+            if p.get("job") == "Director" and p.get("id") and p.get("name")
+        ][:5]
 
-    return names[:5]
+    created_by = details.get("created_by") or []
+    return [
+        {"id": p.get("id"), "name": p.get("name")}
+        for p in created_by
+        if p.get("id") and p.get("name")
+    ][:5]
 
 
-def _get_writers(details: dict, media_type: str) -> List[str]:
+def _get_writer_people(details: dict) -> List[dict]:
     crew = (details.get("credits") or {}).get("crew") or []
-
     wanted_jobs = {"Writer", "Screenplay", "Story", "Original Story", "Series Composition"}
-    names = []
 
-    for person in crew:
-        name = person.get("name")
-        job = person.get("job")
-        if name and job in wanted_jobs and name not in names:
-            names.append(name)
+    people = []
+    seen = set()
 
-    return names[:5]
+    for p in crew:
+        pid = p.get("id")
+        name = p.get("name")
+        job = p.get("job")
+
+        if pid and name and job in wanted_jobs and pid not in seen:
+            seen.add(pid)
+            people.append({"id": pid, "name": name})
+
+    return people[:5]
 
 
-def _get_cast(details: dict) -> List[str]:
+def _get_cast_people(details: dict) -> List[dict]:
     cast = (details.get("credits") or {}).get("cast") or []
-    return [p.get("name") for p in cast if p.get("name")][:7]
+    return [
+        {"id": p.get("id"), "name": p.get("name")}
+        for p in cast
+        if p.get("id") and p.get("name")
+    ][:7]
+
+async def _person_imdb_url(person_id: int) -> Optional[str]:
+    cached = _cache_get(_person_imdb_cache, person_id)
+    if cached is not _MISSING:
+        return cached
+
+    data = await _tmdb_request(f"person/{person_id}/external_ids")
+    if not data:
+        _cache_set(_person_imdb_cache, person_id, None, PERSON_CACHE_TTL_SECONDS)
+        return None
+
+    imdb_id = data.get("imdb_id")
+    url = f"https://www.imdb.com/name/{imdb_id}" if imdb_id else None
+    _cache_set(_person_imdb_cache, person_id, url, PERSON_CACHE_TTL_SECONDS)
+    return url
+
+
+async def _people_links(people: List[dict], limit: int = 7) -> str:
+    people = people[:limit]
+    if not people:
+        return "N/A"
+
+    urls = await asyncio.gather(
+        *[_person_imdb_url(p["id"]) for p in people if p.get("id") and p.get("name")],
+        return_exceptions=True,
+    )
+
+    linked = []
+    valid_people = [p for p in people if p.get("id") and p.get("name")]
+
+    for person, url in zip(valid_people, urls):
+        if isinstance(url, Exception) or not url:
+            linked.append(person["name"])
+        else:
+            linked.append(f"<a href='{url}'>{person['name']}</a>")
+
+    return " ".join(linked)
 
 
 def _get_plot(details: dict) -> str:
@@ -381,9 +483,9 @@ async def get_imdb_info(query: str, *, imdb_id: bool = False, id: bool = False) 
     release_country = _pick_release_country(details)
     genres = _get_genres(details)
     languages = _get_languages(details)
-    directors = _get_directors(details, media_type)
-    writers = _get_writers(details, media_type)
-    stars = _get_cast(details)
+    directors = _get_director_people(details, media_type)
+    writers = _get_writer_people(details)
+    stars = _get_cast_people(details)
     imdb_id_value = ((details.get("external_ids") or {}).get("imdb_id")) or None
     title = details.get("title") or details.get("name")
     year_raw = details.get("release_date") or details.get("first_air_date") or ""
@@ -395,6 +497,10 @@ async def get_imdb_info(query: str, *, imdb_id: bool = False, id: bool = False) 
         country_line = f"{_country_flag(release_country)} #{release_country}"
     else:
         country_line = "N/A"
+
+    directors_links = await _people_links(directors, limit=5)
+    writers_links = await _people_links(writers, limit=5)
+    stars_links = await _people_links(stars, limit=7)
 
     return {
         "title": title,
@@ -411,7 +517,7 @@ async def get_imdb_info(query: str, *, imdb_id: bool = False, id: bool = False) 
         "languages_line": languages_line,
         "country_line": country_line,
         "plot": _get_plot(details),
-        "directors_line": ", ".join(directors) if directors else "N/A",
-        "writers_line": ", ".join(writers) if writers else "N/A",
-        "stars_line": ", ".join(stars) if stars else "N/A",
+        "directors_line": directors_links,
+        "writers_line": writers_links,
+        "stars_line": stars_links,
     }

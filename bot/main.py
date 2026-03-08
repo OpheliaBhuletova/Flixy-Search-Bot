@@ -27,6 +27,8 @@ logging.config.fileConfig("bot/logging.conf", disable_existing_loggers=False)
 logger = logging.getLogger(__name__)
 logging.getLogger("pyrogram").setLevel(logging.ERROR)
 logging.getLogger("imdbpy").setLevel(logging.ERROR)
+logging.getLogger("httpx").setLevel(logging.WARNING)
+logging.getLogger("aiohttp.access").setLevel(logging.WARNING)
 
 PORT = int(os.getenv("PORT", 8080))
 
