@@ -59,7 +59,7 @@ async def save_file(media) -> Tuple[bool, int, str]:
 
     file_id, file_ref = unpack_new_file_id(media.file_id)
     file_name = re.sub(r"[_\-\.\+]", " ", str(media.file_name))
-
+    clean_title = _announcement_key(file_name)
     try:
         file = Media(
             file_id=file_id,
