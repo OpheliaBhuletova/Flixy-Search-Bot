@@ -519,6 +519,9 @@ async def get_imdb_info(query: str, *, imdb_id: bool = False, id: bool = False) 
     writers_links = await _people_links(writers, limit=5)
     stars_links = await _people_links(stars, limit=7)
 
+    episode_runtime = details.get("episode_run_time") or []
+    runtime_value = details.get("runtime") or (episode_runtime[0] if episode_runtime else None)
+
     return {
         "title": title,
         "year": year_raw[:4] if year_raw else "N/A",
@@ -526,7 +529,7 @@ async def get_imdb_info(query: str, *, imdb_id: bool = False, id: bool = False) 
         "aka": details.get("original_title") or details.get("original_name") or "N/A",
         "rating": round(details.get("vote_average", 0), 1) if details.get("vote_average") else "N/A",
         "votes": details.get("vote_count") or "N/A",
-        "runtime": _format_runtime(details.get("runtime") or details.get("episode_run_time", [None])[0]),
+        "runtime": _format_runtime(runtime_value),
         "release_date": _pick_release_date(details, media_type),
         "release_country": release_country,
         "release_link": f"https://www.imdb.com/title/{imdb_id_value}/releaseinfo" if imdb_id_value else "N/A",

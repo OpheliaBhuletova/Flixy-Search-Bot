@@ -30,11 +30,18 @@ logger = logging.getLogger(__name__)
 async def animate_search_message(message):
     dots = ["", ".", "..", "..."]
     i = 0
+    last_text = None
 
     try:
         while True:
-            await message.edit(f"Searching IMDb{dots[i % 4]}")
-            await asyncio.sleep(0.5)
+            text = f"Searching IMDb{dots[i % 4]}"
+            if text != last_text:
+                try:
+                    await message.edit(text)
+                    last_text = text
+                except Exception:
+                    pass
+            await asyncio.sleep(0.7)
             i += 1
     except asyncio.CancelledError:
         pass
@@ -233,7 +240,11 @@ async def imdb_info_handler(client: Client, message: Message):
 
     imdb = await get_imdb_info(query)
 
-    animation.cancel()  
+    animation.cancel()
+    try:
+        await animation
+    except asyncio.CancelledError:
+        pass    
     await status.edit("Found result ✔")
     await asyncio.sleep(0.4)  # small delay to ensure the "Found result" message is visible before editing with full info
     if not imdb:
