@@ -254,8 +254,7 @@ async def imdb_info_handler(client: Client, message: Message):
         )
 
     msg = (
-        f"<b>Movie:</b> <a href='{imdb['url']}'>{imdb['title']}</a> [{imdb['year']}]\n"
-        f"<i>Also Known As:</i> {imdb['aka']}\n"
+        f"<b>{imdb['type_label']}:</b> <a href='{imdb['url']}'>{imdb['title']}</a> [{imdb['year']}]\n"        f"<i>Also Known As:</i> {imdb['aka']}\n"
         f"<b>Rating ⭐️:</b> {imdb['rating']} / 10\n"
         f"(<code>{imdb['rating']} based on {imdb['votes']} TMDb votes</code>) | <code>{imdb['runtime']}</code> |\n"
         f"<b>Release Info:</b> <a href='{imdb['release_link']}'>{imdb['release_date']} ({imdb['release_country']})</a>\n"

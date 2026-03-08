@@ -187,7 +187,7 @@ async def _tmdb_request(endpoint: str, params: Optional[dict] = None) -> Optiona
         return None
 
 
-async def _find_tmdb_item(query: str) -> Optional[dict]:
+async def _find_tmdb_item(query: str, preferred_type: Optional[str] = None) -> Optional[dict]:
     title, year = _extract_year_and_title(query)
 
     data = await _tmdb_request(
@@ -452,7 +452,20 @@ async def get_poster(
 
 
 async def get_imdb_info(query: str, *, imdb_id: bool = False, id: bool = False) -> Optional[Dict[str, Any]]:
+    preferred_type = None
+
     if not imdb_id and not id:
+        lowered = query.strip().lower()
+        if lowered.startswith("tv "):
+            preferred_type = "tv"
+            query = query[3:].strip()
+        elif lowered.startswith("series "):
+            preferred_type = "tv"
+            query = query[7:].strip()
+        elif lowered.startswith("movie "):
+            preferred_type = "movie"
+            query = query[6:].strip()
+
         normalized = _normalize_imdb_id(query)
         if normalized and len(normalized) >= 6:
             imdb_id = True
@@ -476,7 +489,13 @@ async def get_imdb_info(query: str, *, imdb_id: bool = False, id: bool = False) 
         movie_results = find_data.get("movie_results") or []
         tv_results = find_data.get("tv_results") or []
 
-        if movie_results:
+        if preferred_type == "tv" and tv_results:
+            item = tv_results[0]
+            media_type = "tv"
+        elif preferred_type == "movie" and movie_results:
+            item = movie_results[0]
+            media_type = "movie"
+        elif movie_results:
             item = movie_results[0]
             media_type = "movie"
         elif tv_results:
@@ -487,7 +506,7 @@ async def get_imdb_info(query: str, *, imdb_id: bool = False, id: bool = False) 
 
         details = await _get_tmdb_details(item["id"], media_type)
     else:
-        item = await _find_tmdb_item(query)
+        item = await _find_tmdb_item(query, preferred_type=preferred_type)
         if not item:
             return None
 
@@ -523,6 +542,8 @@ async def get_imdb_info(query: str, *, imdb_id: bool = False, id: bool = False) 
     runtime_value = details.get("runtime") or (episode_runtime[0] if episode_runtime else None)
 
     return {
+        "type_label": "TV Series" if media_type == "tv" else "Movie",
+        "media_type": media_type,
         "title": title,
         "year": year_raw[:4] if year_raw else "N/A",
         "url": _title_url(details, media_type, imdb_id_value),
