@@ -86,6 +86,10 @@ class Settings(BaseSettings):
     PUBLIC_FILE_STORE: bool = True
 
     # ─── Boolean compatibility ─────────────────────────────────────────
+    @property
+    def METADATA_ENABLED(self) -> bool:
+        return bool(self.TMDB_API_KEY)
+    
     @field_validator(
         "P_TTI_SHOW_OFF",
         "IMDB",
@@ -121,7 +125,7 @@ settings = Settings()
 
 def build_log_string() -> str:
     log = "Current Customized Configurations:\n"
-    log += "IMDB enabled\n" if settings.IMDB else "IMDB disabled\n"
+    log += "TMDb metadata enabled\n" if settings.METADATA_ENABLED else "TMDb metadata disabled\n"
     log += "Spell check enabled\n" if settings.SPELL_CHECK_REPLY else "Spell check disabled\n"
     log += (
         f"MAX_LIST_ELM set to {settings.MAX_LIST_ELM}\n"

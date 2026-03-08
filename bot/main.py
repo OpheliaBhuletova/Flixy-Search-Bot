@@ -206,7 +206,7 @@ class Bot(Client):
                 startup_msg = (
                     f"<b>🚀 Flixy Search Bot Online</b>\n\n"
                     f"<blockquote>\n"
-                    f"IMDB:        <b>{('Enabled ✓' if settings.IMDB else 'Disabled ✗')}</b>\n"
+                    f"Metadata: {('TMDb ✓' if settings.METADATA_ENABLED else 'Disabled ✗')}\n"
                     f"SpellCheck:  <b>{('Enabled ✓' if settings.SPELL_CHECK_REPLY else 'Disabled ✗')}</b>\n"
                     f"Max Results: <b>{(settings.MAX_LIST_ELM if settings.MAX_LIST_ELM else 'Default')}</b>\n"
                     f"</blockquote>\n\n"
@@ -331,7 +331,7 @@ if __name__ == "__main__":
 #<b>🚀 Flixy Search Bot Online</b>
 #
 #<pre>
-#IMDB:        {"Enabled ✓" if settings.IMDB else "Disabled ✗"}
+#Metadata: {('TMDb ✓' if settings.METADATA_ENABLED else 'Disabled ✗')}
 #SpellCheck:  {"Enabled ✓" if settings.SPELL_CHECK_REPLY else "Disabled ✗"}
 #Max Results: {settings.MAX_LIST_ELM if settings.MAX_LIST_ELM else "Default"}
 #</pre>

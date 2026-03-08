@@ -264,6 +264,11 @@ def _get_plot(details: dict) -> str:
         return plot[:800] + "..."
     return plot
 
+def _title_url(details: dict, media_type: str, imdb_id_value: Optional[str]) -> str:
+    if imdb_id_value:
+        return f"https://www.imdb.com/title/{imdb_id_value}"
+    return f"https://www.themoviedb.org/{media_type}/{details.get('id')}"
+
 
 async def get_poster(
     query: str,
@@ -319,13 +324,11 @@ async def get_poster(
     return {
         "title": details.get("title") or details.get("name"),
         "year": year,
-        "rating": details.get("vote_average") or "N/A",
+        "rating": round(details.get("vote_average", 0), 1) if details.get("vote_average") else "N/A",
         "genres": list_to_str(_get_genres(details)),
         "poster": _poster_url(details.get("poster_path")) or _backdrop_url(details.get("backdrop_path")),
         "plot": _get_plot(details),
-        "url": f"https://www.imdb.com/title/{imdb_id_value}" if imdb_id_value else (
-            f"https://www.themoviedb.org/{media_type}/{details.get('id')}"
-        ),
+        "url": _title_url(details, media_type, imdb_id_value),
     }
 
 
@@ -396,18 +399,14 @@ async def get_imdb_info(query: str, *, imdb_id: bool = False, id: bool = False) 
     return {
         "title": title,
         "year": year_raw[:4] if year_raw else "N/A",
-        "url": f"https://www.imdb.com/title/{imdb_id_value}" if imdb_id_value else (
-            f"https://www.themoviedb.org/{media_type}/{details.get('id')}"
-        ),
+        "url": _title_url(details, media_type, imdb_id_value),
         "aka": details.get("original_title") or details.get("original_name") or "N/A",
-        "rating": details.get("vote_average") or "N/A",
+        "rating": round(details.get("vote_average", 0), 1) if details.get("vote_average") else "N/A",
         "votes": details.get("vote_count") or "N/A",
         "runtime": _format_runtime(details.get("runtime") or details.get("episode_run_time", [None])[0]),
         "release_date": _pick_release_date(details, media_type),
         "release_country": release_country,
-        "release_link": f"https://www.imdb.com/title/{imdb_id_value}/releaseinfo" if imdb_id_value else (
-            f"https://www.themoviedb.org/{media_type}/{details.get('id')}"
-        ),
+        "release_link": f"https://www.imdb.com/title/{imdb_id_value}/releaseinfo" if imdb_id_value else "N/A",
         "genres_line": genre_line,
         "languages_line": languages_line,
         "country_line": country_line,
