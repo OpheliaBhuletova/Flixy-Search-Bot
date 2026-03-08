@@ -61,6 +61,7 @@ class Settings(BaseSettings):
 
     P_TTI_SHOW_OFF: bool = False
     IMDB: bool = True
+    TMDB_API_KEY: Optional[str] = None
     SINGLE_BUTTON: bool = True
 
     CUSTOM_FILE_CAPTION: Optional[str] = None
