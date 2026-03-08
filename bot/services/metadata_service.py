@@ -209,6 +209,8 @@ async def _find_tmdb_item(query: str, preferred_type: Optional[str] = None) -> O
         media_type = item.get("media_type")
         if media_type not in ("movie", "tv"):
             continue
+        if preferred_type and media_type != preferred_type:
+            continue
 
         release_date = item.get("release_date") or item.get("first_air_date") or ""
         item_year = release_date[:4] if release_date else None
@@ -219,11 +221,18 @@ async def _find_tmdb_item(query: str, preferred_type: Optional[str] = None) -> O
     if filtered:
         return filtered[0]
 
+    # Important: if user explicitly gave a year, don't fall back to a random title
+    if year:
+        return None
+
     return next(
-        (item for item in results if item.get("media_type") in ("movie", "tv")),
+        (
+            item for item in results
+            if item.get("media_type") in ("movie", "tv")
+            and (not preferred_type or item.get("media_type") == preferred_type)
+        ),
         None,
     )
-
 
 async def _get_tmdb_details(tmdb_id: int, media_type: str) -> Optional[dict]:
     details = await _tmdb_request(
