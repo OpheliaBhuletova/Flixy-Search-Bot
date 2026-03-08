@@ -33,8 +33,7 @@ async def animate_search_message(message):
 
     try:
         while True:
-            text = f"Searching IMDb{dots[i % 4]}"
-            await message.edit(text)
+            await message.edit(f"Searching IMDb{dots[i % 4]}")
             await asyncio.sleep(0.5)
             i += 1
     except asyncio.CancelledError:
@@ -234,7 +233,9 @@ async def imdb_info_handler(client: Client, message: Message):
 
     imdb = await get_imdb_info(query)
 
-    animation.cancel()    
+    animation.cancel()  
+    await status.edit("Found result ✔")
+    await asyncio.sleep(0.4)  # small delay to ensure the "Found result" message is visible before editing with full info
     if not imdb:
         return await status.edit(
             f"No IMDb results found for <b>{html.escape(query)}</b>.",
