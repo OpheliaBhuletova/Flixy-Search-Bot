@@ -22,10 +22,13 @@ from bot.config import settings
 from bot.utils.helpers import extract_user, get_file_id, last_online
 from bot.utils.cache import RuntimeCache
 from bot.utils.messages import Texts
-from bot.services.imdb_service import get_imdb_info, get_poster
+from bot.services.metadata_service import get_imdb_info, get_poster
 
 logger = logging.getLogger(__name__)
 
+@property
+def METADATA_TEMPLATE(self) -> str:
+    return self.IMDB_TEMPLATE
 
 @Client.on_message(filters.command("id"))
 async def show_id_handler(client: Client, message):
@@ -253,7 +256,7 @@ async def imdb_callback_handler(client: Client, callback: CallbackQuery):
     if not imdb:
         return await callback.answer("No data found.", show_alert=True)
 
-    caption = settings.IMDB_TEMPLATE.format(**imdb, query=imdb["title"])
+    caption = settings.METADATA_TEMPLATE.format(**imdb, query=imdb["title"])
     buttons = [[InlineKeyboardButton(imdb["title"], url=imdb["url"])]]
     markup = InlineKeyboardMarkup(buttons)
 

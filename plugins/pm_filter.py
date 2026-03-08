@@ -40,7 +40,7 @@ from bot.utils.helpers import (
 )
 from bot.services.web_search import search_gagala
 
-from bot.services.imdb_service import get_poster
+from bot.services.metadata_service import get_poster
 
 logger = logging.getLogger(__name__)
 

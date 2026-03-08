@@ -6,7 +6,9 @@ from bot.config import settings
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.WARNING)
 
-
+@property
+def METADATA_TEMPLATE(self) -> str:
+    return self.IMDB_TEMPLATE
 
 class Database:
     def __init__(self, uri, database_name):
@@ -145,7 +147,7 @@ class Database:
             "imdb": settings.IMDB,
             "spell_check": settings.SPELL_CHECK_REPLY,
             "welcome": settings.MELCOW_NEW_USERS,
-            "template": settings.IMDB_TEMPLATE,
+            "template": settings.METADATA_TEMPLATE,
         }
 
     async def update_settings(self, id, settings):

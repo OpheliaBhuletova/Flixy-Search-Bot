@@ -68,13 +68,16 @@ class Settings(BaseSettings):
     BATCH_FILE_CAPTION: Optional[str] = None
 
     IMDB_TEMPLATE: str = (
-        "<b>Query: {query}</b>\n\n"
-        "🏷 Title: <a href={url}>{title}</a>\n"
-        "🎭 Genres: {genres}\n"
-        "📆 Year: <a href={url}/releaseinfo>{year}</a>\n"
-        "🌟 Rating: <a href={url}/ratings>{rating}</a> / 10"
+        "<b>🔍 Query:</b> {query}\n\n"
+        "🎬 <b>Title:</b> <a href={url}>{title}</a>\n"
+        "🎭 <b>Genres:</b> {genres}\n"
+        "📆 <b>Year:</b> <a href={url}/releaseinfo>{year}</a>\n"
+        "⭐ <b>IMDb Rating:</b> <a href={url}/ratings>{rating}</a> / 10"
     )
-
+    @property
+    def METADATA_TEMPLATE(self) -> str:
+        return self.IMDB_TEMPLATE
+    
     LONG_IMDB_DESCRIPTION: bool = False
     SPELL_CHECK_REPLY: bool = True
     MAX_LIST_ELM: Optional[int] = None
