@@ -6,6 +6,8 @@ from typing import Any, Dict, List, Optional
 import httpx
 import asyncio
 
+import pycountry
+
 from bot.config import settings
 
 GENRE_EMOJI = {
@@ -244,15 +246,30 @@ def _backdrop_url(path: Optional[str]) -> Optional[str]:
 
 
 def _pick_release_country(details: dict) -> str:
-    origin_country = details.get("origin_country") or []
     production_countries = details.get("production_countries") or []
+    origin_country = details.get("origin_country") or []
 
-    if origin_country:
-        return origin_country[0]
-
+    # Best case: TMDb already gives the country name
     if production_countries:
         country = production_countries[0]
-        return country.get("name") or country.get("iso_3166_1") or "N/A"
+        name = country.get("name")
+        if name:
+            return name
+
+        iso = country.get("iso_3166_1")
+        if iso:
+            try:
+                return pycountry.countries.get(alpha_2=iso).name
+            except Exception:
+                return iso
+
+    # Fallback: origin_country only gives ISO
+    if origin_country:
+        iso = origin_country[0]
+        try:
+            return pycountry.countries.get(alpha_2=iso).name
+        except Exception:
+            return iso
 
     return "N/A"
 
@@ -357,7 +374,7 @@ async def _people_links(people: List[dict], limit: int = 7) -> str:
         else:
             linked.append(f"<a href='{url}'>{person['name']}</a>")
 
-    return " ".join(linked)
+    return ", ".join(linked)
 
 
 def _get_plot(details: dict) -> str:
@@ -494,7 +511,7 @@ async def get_imdb_info(query: str, *, imdb_id: bool = False, id: bool = False) 
     languages_line = " ".join(f"#{lang.replace(' ', '_')}" for lang in languages) or "N/A"
 
     if release_country and release_country != "N/A":
-        country_line = f"{_country_flag(release_country)} #{release_country}"
+        country_line = f"{_country_flag(release_country)} {release_country}"
     else:
         country_line = "N/A"
 
