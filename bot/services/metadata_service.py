@@ -370,7 +370,7 @@ async def _people_links(people: List[dict], limit: int = 7) -> str:
 
     for person, url in zip(valid_people, urls):
         if isinstance(url, Exception) or not url:
-            linked.append(person["name"])
+            linked.append(f"<a href='https://www.imdb.com/'>{person['name']}</a>")
         else:
             linked.append(f"<a href='{url}'>{person['name']}</a>")
 
