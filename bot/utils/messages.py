@@ -62,7 +62,7 @@ Link your groups to the bot and control them from PM.
 <b>🐍 Language:</b> Python 3.11+  
 <b>🗄 Database:</b> MongoDB  
 <b>🌐 Hosting:</b> Koyeb  
-<b>🔖 Version:</b> V2.4.2 (Beta)  
+<b>🔖 Version:</b> V2.7.2  
 
 Built for speed, stability, and smooth movie searching 🚀
 """
