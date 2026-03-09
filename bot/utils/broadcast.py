@@ -1,5 +1,6 @@
 import asyncio
 import logging
+import re
 from pyrogram import Client, enums
 from pyrogram.errors import (
     InputUserDeactivated,
@@ -14,6 +15,15 @@ from database.users_chats_db import db
 
 logger = logging.getLogger(__name__)
 
+def _split_title_year(title: str) -> tuple[str, str | None]:
+    if not title:
+        return "", None
+
+    match = re.match(r"^(.*?)\s*\((\d{4})\)\s*$", title.strip())
+    if match:
+        return match.group(1).strip(), match.group(2)
+
+    return title.strip(), None
 
 async def broadcast_messages(user_id: int, message: Message):
     try:
@@ -46,12 +56,14 @@ async def broadcast_messages(user_id: int, message: Message):
 async def new_movie_broadcast(client: Client, title: str):
     """Notify all users about a newly indexed movie title."""
     users = await db.get_all_users()
-
+    movie_title, movie_year = _split_title_year(title)
+    display_name = f"{movie_title} ({movie_year})" if movie_year else movie_title
     msg_text = (
         "🎬 <b>New Movie Added</b>\n\n"
-        f"<b>{title}</b>\n\n"
+        f"<b>Title:</b> {movie_title}\n"
+        f"<b>Year:</b> {movie_year or 'N/A'}\n\n"
         "🔎 <b>Search instantly:</b>\n"
-        f"Use inline search — <code>@{RuntimeCache.bot_username} {title}</code>\n\n"
+        f"Use inline search — <code>@{RuntimeCache.bot_username} {display_name}</code>\n\n"
         "📩 <b>Or send me the movie name in PM</b> to get the file."
     )
 

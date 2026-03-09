@@ -59,7 +59,7 @@ async def save_file(media) -> Tuple[bool, int, str]:
 
     file_id, file_ref = unpack_new_file_id(media.file_id)
     file_name = re.sub(r"[_\-\.\+]", " ", str(media.file_name))
-    clean_title = _announcement_key(file_name)
+    _display_title = _announcement_key(file_name)
     try:
         file = Media(
             file_id=file_id,
@@ -72,16 +72,16 @@ async def save_file(media) -> Tuple[bool, int, str]:
         )
     except ValidationError:
         logger.exception("Validation error while saving media")
-        return False, 2, clean_title or file_name
+        return False, 2, _display_title or file_name
 
     try:
         await file.commit()
-        return True, 1, clean_title or file_name
+        return True, 1, _display_title or file_name
     except DuplicateKeyError:
-        return False, 0, clean_title or file_name
+        return False, 0, _display_title or file_name
     except Exception:
         logger.exception("Unexpected error while saving media")
-        return False, 2, clean_title or file_name
+        return False, 2, _display_title or file_name
 
 # ─── Search Engine ───────────────────────────────────────────────────────
 async def get_search_results(
@@ -230,3 +230,16 @@ def unpack_new_file_id(new_file_id: str) -> Tuple[str, str]:
 
     file_ref = encode_file_ref(decoded.file_reference)
     return file_id, file_ref
+
+def _display_title(title: str) -> str:
+    if not title:
+        return ""
+
+    title = title.strip()
+    match = re.search(r"\(\s*\d{4}\s*\)", title)
+    if match:
+        value = title[: match.end()]
+    else:
+        value = title
+
+    return re.sub(r"\s+", " ", value).strip()
