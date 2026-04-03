@@ -1,0 +1,489 @@
+import os
+import html
+import logging
+import random
+from datetime import datetime
+import asyncio
+
+from pyrogram import Client, filters, enums
+from database.users_chats_db import db
+from pyrogram.types import (
+    InlineKeyboardMarkup,
+    InlineKeyboardButton,
+    CallbackQuery,
+    Message,
+    InputMediaPhoto,
+)
+from pyrogram.errors.exceptions.bad_request_400 import (
+    UserNotParticipant,
+    MediaEmpty,
+    PhotoInvalidDimensions,
+    WebpageMediaEmpty,
+)
+
+from bot.config import settings
+from bot.utils.helpers import extract_user, get_file_id, schedule_delete_message
+from bot.utils.cache import RuntimeCache
+from bot.utils.messages import Texts
+from bot.services.metadata_service import get_imdb_info, get_poster, search_tmdb_titles
+
+logger = logging.getLogger(__name__)
+
+async def animate_search_message(message):
+    dots = ["", ".", "..", "..."]
+    i = 0
+    last_text = None
+
+    try:
+        while True:
+            text = f"Searching IMDb{dots[i % 4]}"
+            if text != last_text:
+                try:
+                    await message.edit(text)
+                    last_text = text
+                except Exception:
+                    pass
+            await asyncio.sleep(0.7)
+            i += 1
+    except asyncio.CancelledError:
+        pass
+
+@Client.on_message(filters.command("id"))
+async def show_id_handler(client: Client, message):
+    chat_type = message.chat.type
+
+    if chat_type == enums.ChatType.PRIVATE:
+        user = message.from_user
+        await message.reply_text(
+            f"<b>➲ First Name:</b> {user.first_name}\n"
+            f"<b>➲ Last Name:</b> {user.last_name or ''}\n"
+            f"<b>➲ Username:</b> {user.username}\n"
+            f"<b>➲ Telegram ID:</b> <code>{user.id}</code>\n"
+            f"<b>➲ Data Centre:</b> <code>{user.dc_id or ''}</code>",
+            quote=True,
+        )
+        return
+
+    text = f"<b>➲ Chat ID:</b> <code>{message.chat.id}</code>\n"
+
+    if message.reply_to_message:
+        text += (
+            "<b>➲ User ID:</b> "
+            f"<code>{message.from_user.id if message.from_user else 'Anonymous'}</code>\n"
+            "<b>➲ Replied User ID:</b> "
+            f"<code>{message.reply_to_message.from_user.id if message.reply_to_message.from_user else 'Anonymous'}</code>\n"
+        )
+        file_info = get_file_id(message.reply_to_message)
+    else:
+        text += (
+            "<b>➲ User ID:</b> "
+            f"<code>{message.from_user.id if message.from_user else 'Anonymous'}</code>\n"
+        )
+        file_info = get_file_id(message)
+
+    if file_info:
+        text += f"<b>{file_info.message_type}:</b> <code>{file_info.file_id}</code>\n"
+
+    await message.reply_text(text, quote=True)
+
+
+@Client.on_message(filters.command("info"))
+async def user_info_handler(client: Client, message):
+    status = await message.reply("Fetching user info...")
+    user_id, _ = extract_user(message)
+
+    try:
+        user = await client.get_users(user_id)
+    except Exception as e:
+        return await status.edit(str(e))
+
+    info = (
+        f"<b>➲ First Name:</b> {user.first_name}\n"
+        f"<b>➲ Last Name:</b> {user.last_name or '<b>None</b>'}\n"
+        f"<b>➲ Telegram ID:</b> <code>{user.id}</code>\n"
+        f"<b>➲ Username:</b> @{user.username or 'None'}\n"
+        f"<b>➲ Data Centre:</b> <code>{user.dc_id or 'N/A'}</code>\n"
+        f"<b>➲ User Link:</b> "
+        f"<a href='tg://user?id={user.id}'>Click Here</a>\n"
+    )
+
+    if message.chat.type in {enums.ChatType.SUPERGROUP, enums.ChatType.CHANNEL}:
+        try:
+            member = await message.chat.get_member(user.id)
+            joined = (member.joined_date or datetime.now()).strftime("%Y-%m-%d %H:%M:%S")
+            info += f"<b>➲ Joined:</b> <code>{joined}</code>\n"
+        except UserNotParticipant:
+            pass
+
+    buttons = [[InlineKeyboardButton("🔐 Close", callback_data="close_data")]]
+    markup = InlineKeyboardMarkup(buttons)
+
+    if user.photo:
+        path = await client.download_media(user.photo.big_file_id)
+        await message.reply_photo(
+            photo=path,
+            caption=info,
+            reply_markup=markup,
+            parse_mode=enums.ParseMode.HTML,
+        )
+        os.remove(path)
+    else:
+        await message.reply_text(
+            info,
+            reply_markup=markup,
+            parse_mode=enums.ParseMode.HTML,
+        )
+
+    await status.delete()
+
+
+@Client.on_message(filters.command("purge") & filters.group)
+async def purge_handler(client: Client, message: Message):
+    """Delete all messages from the replied message up to the latest one."""
+    if not message.reply_to_message:
+        return await message.reply_text(
+            "Reply to a message to start the purge from.",
+            quote=True,
+        )
+
+    user_id = message.from_user.id if message.from_user else None
+    if not user_id:
+        return
+
+    try:
+        member = await client.get_chat_member(message.chat.id, user_id)
+    except Exception:
+        return
+
+    if (
+        member.status not in (enums.ChatMemberStatus.ADMINISTRATOR, enums.ChatMemberStatus.OWNER)
+        and str(user_id) not in map(str, settings.ADMINS)
+    ):
+        return
+
+    start_id = message.reply_to_message.message_id
+    chat_id = message.chat.id
+
+    deleted = 0
+    batch = []
+
+    async for msg in client.iter_history(chat_id):
+        if msg.message_id < start_id:
+            break
+        batch.append(msg.message_id)
+        if len(batch) >= 100:
+            try:
+                await client.delete_messages(chat_id, batch)
+                deleted += len(batch)
+            except Exception:
+                pass
+            batch = []
+
+    if batch:
+        try:
+            await client.delete_messages(chat_id, batch)
+            deleted += len(batch)
+        except Exception:
+            pass
+
+    try:
+        sent = await message.reply_text(
+            f"Purged {deleted} messages (from replied message to latest).",
+            quote=True,
+        )
+        schedule_delete_message(client, sent.chat.id, sent.id, delay_seconds=20)
+    except Exception:
+        pass
+
+
+@Client.on_message(filters.command(["imdb", "search"]))
+async def imdb_search_handler(client: Client, message: Message):
+    if len(message.command) < 2:
+        return await message.reply("Give me a movie / series name.")
+
+    query = message.text.split(None, 1)[1].strip()
+
+    preferred_type = None
+    lowered = query.lower()
+    if lowered.startswith("tv "):
+        preferred_type = "tv"
+    elif lowered.startswith("series "):
+        preferred_type = "tv"
+    elif lowered.startswith("movie "):
+        preferred_type = "movie"
+
+    status = await message.reply("Searching TMDb...")
+
+    results = await search_tmdb_titles(query, preferred_type=preferred_type, limit=10)
+    if not results:
+        return await status.edit("No results found.")
+
+    buttons = [
+        [
+            InlineKeyboardButton(
+                text=f"{item['title']} - {item['year']} ({'TV' if item['media_type'] == 'tv' else 'Movie'})",
+                callback_data=f"imdb#{item['media_type']}#{item['id']}",
+            )
+        ]
+        for item in results
+    ]
+
+    await status.edit(
+        "Here is what I found:",
+        reply_markup=InlineKeyboardMarkup(buttons),
+    )
+
+
+@Client.on_message(filters.command("imdbinfo"))
+async def imdb_info_handler(client: Client, message: Message):
+    if len(message.command) < 2:
+        return await message.reply(
+            "<b>Usage:</b> /imdbinfo <movie name> — or — /imdbinfo <tmdb_id>\n\n"
+            "<i>Example:</i> /imdbinfo Khajuraho Dreams\n"
+            "<i>Example:</i> /imdbinfo 1262547\n"
+            "<i>Example:</i> /imdbinfo tv The Rookie",
+            quote=True,
+            parse_mode=enums.ParseMode.HTML,
+        )
+
+    query = message.text.split(None, 1)[1]
+    status = await message.reply("Fetching metadata")
+
+    animation = asyncio.create_task(animate_search_message(status))
+    imdb = await get_imdb_info(query)
+
+    animation.cancel()
+    try:
+        await animation
+    except asyncio.CancelledError:
+        pass
+
+    if not imdb:
+        return await status.edit(
+            f"No results found for <b>{html.escape(query)}</b>.",
+            parse_mode=enums.ParseMode.HTML,
+        )
+
+    await status.edit("Found result ✔")
+    await asyncio.sleep(0.4)
+
+    msg = (
+        f"<b>{imdb['type_label']}:</b> <a href='{imdb['url']}'>{imdb['title']}</a> [{imdb['year']}]\n"
+        f"<i>Also Known As:</i> {imdb['aka']}\n"
+        f"<b>Rating ⭐️:</b> {imdb['rating']} / 10\n"
+        f"(<code>{imdb['rating']} based on {imdb['votes']} TMDb votes</code>) | <code>{imdb['runtime']}</code> |\n"
+        f"<b>Release Info:</b> <a href='{imdb['release_link']}'>{imdb['release_date']} ({imdb['release_country']})</a>\n"
+        f"<b>Genre:</b> {imdb['genres_line']}\n"
+        f"<b>Language:</b> {imdb['languages_line']}\n"
+        f"<b>Country of Origin:</b> {imdb['country_line']}\n"
+        f"<b>Story Line:</b> {imdb['plot']}\n"
+        f"<b>Directors:</b> {imdb['directors_line']}\n"
+        f"<b>Writers:</b> {imdb['writers_line']}\n"
+        f"<b>Stars:</b> {imdb['stars_line']}"
+    )
+
+    poster = imdb.get("poster")
+
+    try:
+        if poster:
+            await message.reply_photo(
+                photo=poster,
+                caption=msg,
+                parse_mode=enums.ParseMode.HTML,
+            )
+            await status.delete()
+        else:
+            await status.edit(
+                msg,
+                parse_mode=enums.ParseMode.HTML,
+                disable_web_page_preview=True,
+            )
+    except (MediaEmpty, PhotoInvalidDimensions, WebpageMediaEmpty):
+        await status.edit(
+            msg,
+            parse_mode=enums.ParseMode.HTML,
+            disable_web_page_preview=True,
+        )
+    except Exception:
+        logger.exception("Failed to send poster for /imdbinfo")
+        await status.edit(
+            msg,
+            parse_mode=enums.ParseMode.HTML,
+            disable_web_page_preview=True,
+        )
+
+@Client.on_callback_query(filters.regex("^imdb#"))
+async def imdb_callback_handler(client: Client, callback: CallbackQuery):
+    try:
+        _, media_type, tmdb_id = callback.data.split("#", 2)
+    except ValueError:
+        return await callback.answer("Invalid selection.", show_alert=True)
+
+    query = f"{media_type} {tmdb_id}"
+    imdb = await get_poster(query, id=True)
+
+    if not imdb:
+        return await callback.answer("No data found.", show_alert=True)
+
+    caption = settings.METADATA_TEMPLATE.format(**imdb, query=imdb["title"])
+    buttons = [[InlineKeyboardButton(imdb["title"], url=imdb["url"])]]
+    markup = InlineKeyboardMarkup(buttons)
+
+    try:
+        await callback.message.reply_photo(
+            photo=imdb["poster"],
+            caption=caption,
+            reply_markup=markup,
+            parse_mode=enums.ParseMode.HTML,
+        )
+    except (MediaEmpty, PhotoInvalidDimensions, WebpageMediaEmpty):
+        fallback = imdb["poster"].replace(".jpg", "._V1_UX360.jpg")
+        await callback.message.reply_photo(
+            photo=fallback,
+            caption=caption,
+            reply_markup=markup,
+            parse_mode=enums.ParseMode.HTML,
+        )
+    except Exception:
+        logger.exception("Failed to send callback poster")
+        await callback.message.reply(
+            caption,
+            reply_markup=markup,
+            disable_web_page_preview=False,
+            parse_mode=enums.ParseMode.HTML,
+        )
+
+    await callback.message.delete()
+    await callback.answer()
+
+
+@Client.on_callback_query(filters.regex("^(help|about|cat_.*|start)$"))
+async def help_about_callback_handler(client: Client, callback: CallbackQuery):
+    """Handle Help and About callback buttons."""
+    data = callback.data
+
+    # initial menu or category selection
+    if data == "start":
+        buttons = [
+            [
+                InlineKeyboardButton("🔍 Search", switch_inline_query_current_chat=""),
+                InlineKeyboardButton("🤖 Updates", url="https://t.me/+w7aX0q-ex1U1NDc1"),
+            ],
+            [
+                InlineKeyboardButton("❓Help", callback_data="help"),
+                InlineKeyboardButton("ℹ️ About", callback_data="about"),
+            ],
+        ]
+
+        caption = Texts.START_TXT.format(
+            callback.from_user.mention,
+            RuntimeCache.bot_username,
+        )
+
+        startup_images = []
+        try:
+            startup_images = await db.get_startup_images()
+        except Exception:
+            startup_images = []
+
+        if startup_images:
+            file_id = random.choice(startup_images)
+
+            try:
+                await callback.message.edit_media(
+                    InputMediaPhoto(
+                        media=file_id,
+                        caption=caption,
+                        parse_mode=enums.ParseMode.HTML,
+                    ),
+                    reply_markup=InlineKeyboardMarkup(buttons),
+                )
+            except Exception:
+                try:
+                    await callback.message.edit_text(
+                        caption,
+                        reply_markup=InlineKeyboardMarkup(buttons),
+                        parse_mode=enums.ParseMode.HTML,
+                        disable_web_page_preview=True,
+                    )
+                except Exception:
+                    await callback.message.reply_photo(
+                        file_id,
+                        caption=caption,
+                        reply_markup=InlineKeyboardMarkup(buttons),
+                        parse_mode=enums.ParseMode.HTML,
+                    )
+        else:
+            try:
+                await callback.message.edit_text(
+                    caption,
+                    reply_markup=InlineKeyboardMarkup(buttons),
+                    parse_mode=enums.ParseMode.HTML,
+                    disable_web_page_preview=True,
+                )
+            except Exception:
+                await callback.message.reply_text(
+                    caption,
+                    reply_markup=InlineKeyboardMarkup(buttons),
+                    parse_mode=enums.ParseMode.HTML,
+                    disable_web_page_preview=True,
+                )
+
+        await callback.answer()
+        return
+
+    if data == "help":
+        text = Texts.HELP_TXT
+        parse_mode = enums.ParseMode.MARKDOWN
+        buttons = [
+            [
+                InlineKeyboardButton("🔍 Search / IMDb", callback_data="cat_search"),
+                InlineKeyboardButton("🎛 Filters", callback_data="cat_filters"),
+            ],
+            [
+                InlineKeyboardButton("🔗 Connections", callback_data="cat_connections"),
+                InlineKeyboardButton("🔑 Admin", callback_data="cat_admin"),
+            ],
+            [
+                InlineKeyboardButton("◀️ Back", callback_data="start"),
+                InlineKeyboardButton("❌ Close", callback_data="close_data"),
+            ],
+        ]
+    elif data == "about":  # about
+        text = Texts.ABOUT_TXT.format(
+            client.me.first_name if client.me else "Bot"
+        )
+        parse_mode = enums.ParseMode.HTML
+        buttons = [[
+            InlineKeyboardButton("◀️ Back", callback_data="start"),
+            InlineKeyboardButton("❌ Close", callback_data="close_data"),
+        ]]
+    elif data.startswith("cat_"):
+        cat = data.split("_", 1)[1]
+        if cat == "admin":
+            text = Texts.ADMIN_TXT
+        else:
+            text = getattr(Texts, f"HELP_{cat.upper()}_TXT", None)
+            if not text:
+                text = "No information available for this category."
+            else:
+                text = text.format(RuntimeCache.bot_username)
+        parse_mode = enums.ParseMode.MARKDOWN
+        buttons = [[InlineKeyboardButton("◀️ Back", callback_data="help")]]
+    else:
+        return
+
+    markup = InlineKeyboardMarkup(buttons)
+
+    try:
+        await callback.message.edit_text(
+            text,
+            reply_markup=markup,
+            parse_mode=parse_mode,
+            disable_web_page_preview=True,
+        )
+    except Exception:
+        await callback.answer("Could not update message", show_alert=True)
+        return
+
+    await callback.answer()

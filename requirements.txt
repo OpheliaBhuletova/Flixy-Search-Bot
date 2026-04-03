@@ -1,0 +1,19 @@
+# Core Telegram framework
+git+https://github.com/pyrogram/pyrogram@master
+tgcrypto
+
+# Database (async)
+motor>=3.4.0
+umongo>=3.1.0
+marshmallow>=3.10.0,<4.0.0
+
+# Configuration
+pydantic-settings>=2.1
+python-dotenv>=1.0
+pycountry>=23.12
+
+# HTTP & parsing
+httpx>=0.25
+beautifulsoup4>=4.12
+
+aiohttp>=3.9.0
