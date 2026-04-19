@@ -289,10 +289,10 @@ async def publish_updates_handler(client: Client, message: Message):
         
         # Warm up the peer cache by sending a message first (like the LOG_CHANNEL pattern)
         try:
-            await client.send_message(
-                chat_id=update_channel,
-                text="⏳"
-            )
+            chatz = await client.get_chat(-1003307506115)
+            print(chatz.title)
+            chat = await client.get_chat(update_channel)
+            logger.info(f"Peer warmed: {chat.title}")
         except Exception as e:
             logger.warning(f"Failed to warm peer cache: {e}")
         
