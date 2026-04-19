@@ -21,11 +21,46 @@ BATCH_FILES: dict = {}
 
 @Client.on_message(filters.command("genid") & filters.private)
 async def gen_file_id(client: Client, message: Message):
-    msg = await message.reply_photo("images/start_1.png")
-    await message.reply_text(
-        f"FILE_ID:\n<code>{msg.photo.file_id}</code>",
-        parse_mode=enums.ParseMode.HTML
-    )
+    """Get file_id from a replied message (photo, sticker, video, etc).
+    
+    Usage: Reply to a message with media and send /genid
+    """
+    if not message.reply_to_message:
+        await message.reply(
+            "❌ Please reply to a message with media (photo, sticker, video, etc) "
+            "and then send /genid"
+        )
+        return
+    
+    media_message = message.reply_to_message
+    file_id = None
+    media_type = None
+    
+    # Extract file_id from different media types
+    if media_message.photo:
+        file_id = media_message.photo.file_id
+        media_type = "Photo"
+    elif media_message.sticker:
+        file_id = media_message.sticker.file_id
+        media_type = "Sticker"
+    elif media_message.video:
+        file_id = media_message.video.file_id
+        media_type = "Video"
+    elif media_message.document:
+        file_id = media_message.document.file_id
+        media_type = "Document"
+    elif media_message.audio:
+        file_id = media_message.audio.file_id
+        media_type = "Audio"
+    else:
+        await message.reply("❌ The replied message doesn't contain any media.")
+        return
+    
+    if file_id:
+        await message.reply_text(
+            f"<b>{media_type} FILE_ID:</b>\n<code>{file_id}</code>",
+            parse_mode=enums.ParseMode.HTML
+        )
 
 
 @Client.on_message(filters.command("setstartup") & filters.private)
@@ -212,6 +247,75 @@ async def ad_toggle_handler(client: Client, message: Message):
     except Exception as e:
         logger.exception("Failed to set ad flag")
         await message.reply(f"❌ Error updating ad setting: {e}")
+
+
+@Client.on_message(filters.command("publishupdates") & filters.private)
+async def publish_updates_handler(client: Client, message: Message):
+    """Publish an image to the updates channel (admin only).
+
+    Usage:
+    - Reply to a message with an image: /publishupdates
+    """
+    if message.from_user.id not in settings.ADMINS:
+        await message.reply("❌ This command is restricted to administrators only.")
+        return
+
+    if not message.reply_to_message:
+        await message.reply("❌ Please reply to a message with an image.")
+        return
+
+    replied_message = message.reply_to_message
+
+    # Check if the replied message has a photo
+    if not replied_message.photo:
+        await message.reply("❌ The replied message must contain a photo.")
+        return
+
+    try:
+        # Copy the message with the image to the updates channel
+        update_channel = -1003307506115
+        await client.copy_message(
+            chat_id=update_channel,
+            from_chat_id=replied_message.chat.id,
+            message_id=replied_message.id
+        )
+
+        logger.info(
+            f"Admin {message.from_user.id} published an update to channel {update_channel}"
+        )
+
+        success_msg = (
+            f"✅ <b>Update Published!</b>\n\n"
+            f"<b>Channel:</b> <code>{update_channel}</code>\n"
+            f"<i>The image has been sent to the updates channel.</i>"
+        )
+        await message.reply(success_msg, parse_mode=enums.ParseMode.HTML)
+
+        # Log to LOG_CHANNEL
+        log_channel = getattr(settings, "LOG_CHANNEL", 0)
+        if log_channel:
+            try:
+                user = message.from_user
+                user_link = f"<a href='tg://user?id={user.id}'>{user.first_name}</a>"
+                username_str = f" (@{user.username})" if user.username else ""
+
+                log_msg = (
+                    f"📢 <b>Update Published</b>\n\n"
+                    f"<b>Admin:</b> {user_link}{username_str}\n"
+                    f"<b>Admin ID:</b> <code>{user.id}</code>\n"
+                    f"<b>Channel:</b> <code>{update_channel}</code>"
+                )
+                await client.send_message(
+                    log_channel,
+                    log_msg,
+                    parse_mode=enums.ParseMode.HTML
+                )
+            except Exception:
+                logger.exception("Failed to notify LOG_CHANNEL about update publication")
+
+    except Exception as e:
+        logger.exception(f"Error publishing update: {e}")
+        await message.reply(f"❌ Error publishing update: {str(e)}")
 
 
 @Client.on_message(filters.command("start") & filters.incoming)
