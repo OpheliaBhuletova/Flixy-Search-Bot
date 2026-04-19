@@ -46,6 +46,9 @@ class Settings(BaseSettings):
     # Ad channels: send periodic promotional message to these channel IDs
     AD_CHANNEL: List[Union[int, str]] = []
 
+    # Updates channel: send published updates to this channel
+    UPDATES_CHANNEL: Union[int, str] = 0
+
     # sudo users (super-users) bypass certain restrictions such as
     # subscription checks and bans; configured via environment.
     SUDO_USERS: List[Union[int, str]] = []

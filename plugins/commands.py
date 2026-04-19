@@ -283,18 +283,17 @@ async def publish_updates_handler(client: Client, message: Message):
             return
 
     try:
-        # Copy the message with the image to the updates channel
-        update_channel = -1003307506115
-        update_sticker = "CAACAgUAAxkBAAOXaeUiJNVeBbgSpicTUbvvVllB8JYAAoweAALZY2BVBctCzpA2xKseBA"
+        # Get updates channel from config
+        update_channel = getattr(settings, "UPDATES_CHANNEL", 0)
         
-        # Warm up the peer cache by sending a message first (like the LOG_CHANNEL pattern)
-        try:
-            chatz = await client.get_chat(-1003307506115)
-            print(chatz.title)
-            chat = await client.get_chat(update_channel)
-            logger.info(f"Peer warmed: {chat.title}")
-        except Exception as e:
-            logger.warning(f"Failed to warm peer cache: {e}")
+        if not update_channel:
+            await message.reply(
+                "❌ Updates channel is not configured. "
+                "Admin must set UPDATES_CHANNEL in environment variables."
+            )
+            return
+        
+        update_sticker = "CAACAgUAAxkBAAOXaeUiJNVeBbgSpicTUbvvVllB8JYAAoweAALZY2BVBctCzpA2xKseBA"
         
         # Send image first with or without buttons
         if include_buttons:
@@ -308,24 +307,16 @@ async def publish_updates_handler(client: Client, message: Message):
                 ]
             ]
             
-            try:
-                caption_text = replied_message.caption or ""
-                formatted_caption = f"<b><i>{caption_text}</i></b>" if caption_text else ""
-                
-                await client.send_photo(
-                    chat_id=update_channel,
-                    photo=replied_message.photo.file_id,
-                    caption=formatted_caption,
-                    parse_mode=enums.ParseMode.HTML,
-                    reply_markup=InlineKeyboardMarkup(buttons)
-                )
-            except Exception as e:
-                logger.warning(f"Failed to send photo with buttons: {e}, falling back to copy_message")
-                await client.copy_message(
-                    chat_id=update_channel,
-                    from_chat_id=replied_message.chat.id,
-                    message_id=replied_message.id
-                )
+            caption_text = replied_message.caption or ""
+            formatted_caption = f"<b><i>{caption_text}</i></b>" if caption_text else ""
+            
+            await client.send_photo(
+                chat_id=update_channel,
+                photo=replied_message.photo.file_id,
+                caption=formatted_caption,
+                parse_mode=enums.ParseMode.HTML,
+                reply_markup=InlineKeyboardMarkup(buttons)
+            )
         else:
             await client.copy_message(
                 chat_id=update_channel,
@@ -334,13 +325,10 @@ async def publish_updates_handler(client: Client, message: Message):
             )
         
         # Then send the sticker
-        try:
-            await client.send_sticker(
-                chat_id=update_channel,
-                sticker=update_sticker
-            )
-        except Exception as e:
-            logger.warning(f"Failed to send sticker: {e}")
+        await client.send_sticker(
+            chat_id=update_channel,
+            sticker=update_sticker
+        )
 
         logger.info(
             f"Admin {message.from_user.id} published an update to channel {update_channel} "
