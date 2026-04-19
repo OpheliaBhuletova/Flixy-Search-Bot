@@ -287,6 +287,12 @@ async def publish_updates_handler(client: Client, message: Message):
         update_channel = -1003307506115
         update_sticker = "CAACAgUAAxkBAAOXaeUiJNVeBbgSpicTUbvvVllB8JYAAoweAALZY2BVBctCzpA2xKseBA"
         
+        # Resolve the peer first to avoid "Peer id invalid" error
+        try:
+            await client.get_chat(update_channel)
+        except Exception:
+            logger.exception("Failed to resolve peer for update channel")
+        
         # Send image first with or without buttons
         if include_buttons:
             buttons = [
