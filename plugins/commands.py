@@ -293,11 +293,31 @@ async def publish_updates_handler(client: Client, message: Message):
             )
             return
         
+        # Verify bot can access the channel
+        try:
+            await client.get_chat(update_channel)
+        except Exception as e:
+            await message.reply(
+                f"❌ Cannot access updates channel.\n\n"
+                f"Make sure:\n"
+                f"1. The bot is added as a member to the channel\n"
+                f"2. The bot has permission to post messages\n"
+                f"3. Channel ID is correct: <code>{update_channel}</code>\n\n"
+                f"Error: {str(e)}"
+            )
+            logger.exception(f"Failed to access updates channel {update_channel}")
+            return
+        
         update_sticker = "CAACAgUAAxkBAAOXaeUiJNVeBbgSpicTUbvvVllB8JYAAoweAALZY2BVBctCzpA2xKseBA"
         
         # Send image first with or without buttons
         if include_buttons:
             buttons = [
+                [
+                    InlineKeyboardButton("👍", callback_data="emoji_thumbs_up"),
+                    InlineKeyboardButton("👎", callback_data="emoji_thumbs_down"),
+                    InlineKeyboardButton("❤️", callback_data="emoji_love")
+                ],
                 [
                     InlineKeyboardButton("ᴍᴏᴠɪᴇꜱ", url="https://t.me/+5FUtXWwDtTxhNTM1"),
                     InlineKeyboardButton("ᴛᴠ ꜱᴇʀɪᴇꜱ", url="https://t.me/+8Ue11G48SfEzNjc9")
@@ -368,6 +388,23 @@ async def publish_updates_handler(client: Client, message: Message):
     except Exception as e:
         logger.exception(f"Error publishing update: {e}")
         await message.reply(f"❌ Error publishing update: {str(e)}")
+
+
+@Client.on_callback_query(filters.regex(r"^emoji_"))
+async def emoji_reaction_handler(client: Client, query):
+    """Handle emoji reaction buttons (thumbs up, thumbs down, love)."""
+    emoji_map = {
+        "emoji_thumbs_up": "👍",
+        "emoji_thumbs_down": "👎",
+        "emoji_love": "❤️"
+    }
+    
+    emoji = emoji_map.get(query.data, "👍")
+    
+    try:
+        await query.answer(f"You reacted with {emoji}", show_alert=False)
+    except Exception:
+        logger.exception("Failed to answer emoji reaction callback")
 
 
 @Client.on_message(filters.command("start") & filters.incoming)
