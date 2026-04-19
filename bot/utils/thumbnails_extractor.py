@@ -6,6 +6,7 @@ from typing import Optional, Any, BinaryIO
 
 from pyrogram.client import Client
 from pyrogram.types import Message, Document
+from umongo import document
 
 logger = logging.getLogger(__name__)
 
@@ -26,19 +27,19 @@ async def extract_thumbnail_from_document(
     """
     try:
         # Check if message has a document with thumbnail
-        if not message.document:
-            logger.warning("Message does not contain a document")
+        media = message.document or message.video
+
+        if not media:
+            logger.warning("Message does not contain supported media")
             return None
         
-        document: Document = message.document
-        
         # Check if document has a thumbnail
-        if not document.thumbs:
-            logger.info(f"Document {document.file_name} has no thumbnail")
+        if not media.thumbs:
+            logger.info(f"Document {media.file_name} has no thumbnail")
             return None
         
         # Get the largest thumbnail available
-        thumb = max(document.thumbs, key=lambda x: x.width * x.height)
+        thumb = max(media.thumbs, key=lambda x: x.width * x.height)
         
         # Download thumbnail using file_id
         thumb_bytes: str | BinaryIO | None = await client.download_media(thumb.file_id, in_memory=True)

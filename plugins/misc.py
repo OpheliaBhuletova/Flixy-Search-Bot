@@ -329,21 +329,44 @@ async def imdb_callback_handler(client: Client, callback: CallbackQuery):
     buttons = [[InlineKeyboardButton(imdb["title"], url=imdb["url"])]]
     markup = InlineKeyboardMarkup(buttons)
 
+    # Check if poster exists and is valid
+    poster = imdb.get("poster")
+    if not poster:
+        logger.warning(f"No poster found for title: {imdb['title']}")
+        await callback.message.reply(
+            caption,
+            reply_markup=markup,
+            disable_web_page_preview=False,
+            parse_mode=enums.ParseMode.HTML,
+        )
+        await callback.message.delete()
+        await callback.answer()
+        return
+
     try:
         await callback.message.reply_photo(
-            photo=imdb["poster"],
+            photo=poster,
             caption=caption,
             reply_markup=markup,
             parse_mode=enums.ParseMode.HTML,
         )
     except (MediaEmpty, PhotoInvalidDimensions, WebpageMediaEmpty):
-        fallback = imdb["poster"].replace(".jpg", "._V1_UX360.jpg")
-        await callback.message.reply_photo(
-            photo=fallback,
-            caption=caption,
-            reply_markup=markup,
-            parse_mode=enums.ParseMode.HTML,
-        )
+        fallback = poster.replace(".jpg", "._V1_UX360.jpg")
+        try:
+            await callback.message.reply_photo(
+                photo=fallback,
+                caption=caption,
+                reply_markup=markup,
+                parse_mode=enums.ParseMode.HTML,
+            )
+        except Exception:
+            # If fallback also fails, send as text
+            await callback.message.reply(
+                caption,
+                reply_markup=markup,
+                disable_web_page_preview=False,
+                parse_mode=enums.ParseMode.HTML,
+            )
     except Exception:
         logger.exception("Failed to send callback poster")
         await callback.message.reply(

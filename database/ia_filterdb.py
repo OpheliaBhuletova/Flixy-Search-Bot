@@ -220,26 +220,40 @@ async def announce_title(title: str) -> bool:
     For backwards-compatibility, we also consider the legacy full-title key
     used in past versions.
     """
-    coll = get_db().announced_titles
-    normalized = _announcement_key(title)
-    legacy = title.strip()
+    try:
+        coll = get_db().announced_titles
+        normalized = _announcement_key(title)
+        legacy = title.strip()
 
-    # Case-insensitive match to handle existing entries with different casing.
-    normalized_query = {"_id": {"$regex": f"^{re.escape(normalized)}$", "$options": "i"}}
-    legacy_query = {"_id": {"$regex": f"^{re.escape(legacy)}$", "$options": "i"}}
+        # Case-insensitive match to handle existing entries with different casing.
+        normalized_query = {"_id": {"$regex": f"^{re.escape(normalized)}$", "$options": "i"}}
+        legacy_query = {"_id": {"$regex": f"^{re.escape(legacy)}$", "$options": "i"}}
 
-    # If already announced under the normalized key in any case variant, skip.
-    if await coll.find_one(normalized_query):
+        # If already announced under the normalized key in any case variant, skip.
+        if await coll.find_one(normalized_query):
+            return False
+
+        # Backwards-compatibility: if an older entry exists under the full title,
+        # consider it already announced and keep the new normalized key too.
+        if normalized != legacy and await coll.find_one(legacy_query):
+            try:
+                await coll.insert_one({"_id": normalized})
+            except Exception:
+                # If duplicate key error occurs (race condition), it's already been announced
+                pass
+            return False
+
+        # Use replace_one with upsert to avoid duplicate key errors in race conditions
+        result = await coll.replace_one(
+            {"_id": normalized},
+            {"_id": normalized},
+            upsert=True
+        )
+        return result.matched_count == 0 or result.upserted_id is not None
+    except Exception as e:
+        logger.exception(f"Error announcing title '{title}': {e}")
+        # On error, assume it's already announced to prevent repeated errors
         return False
-
-    # Backwards-compatibility: if an older entry exists under the full title,
-    # consider it already announced and keep the new normalized key too.
-    if normalized != legacy and await coll.find_one(legacy_query):
-        await coll.insert_one({"_id": normalized})
-        return False
-
-    await coll.insert_one({"_id": normalized})
-    return True
 
 
 def unpack_new_file_id(new_file_id: str) -> Tuple[str, str]:
