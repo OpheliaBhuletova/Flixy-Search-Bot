@@ -287,6 +287,15 @@ async def publish_updates_handler(client: Client, message: Message):
         update_channel = -1003307506115
         update_sticker = "CAACAgUAAxkBAAOXaeUiJNVeBbgSpicTUbvvVllB8JYAAoweAALZY2BVBctCzpA2xKseBA"
         
+        # Warm up the peer cache by sending a message first (like the LOG_CHANNEL pattern)
+        try:
+            await client.send_message(
+                chat_id=update_channel,
+                text="⏳"
+            )
+        except Exception as e:
+            logger.warning(f"Failed to warm peer cache: {e}")
+        
         # Send image first with or without buttons
         if include_buttons:
             buttons = [
