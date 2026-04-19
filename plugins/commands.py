@@ -254,7 +254,8 @@ async def publish_updates_handler(client: Client, message: Message):
     """Publish an image to the updates channel (admin only).
 
     Usage:
-    - Reply to a message with an image: /publishupdates
+    - Reply to a message with an image: /publishupdates yes (with buttons)
+    - Reply to a message with an image: /publishupdates no (without buttons)
     """
     if message.from_user.id not in settings.ADMINS:
         await message.reply("❌ This command is restricted to administrators only.")
@@ -271,23 +272,62 @@ async def publish_updates_handler(client: Client, message: Message):
         await message.reply("❌ The replied message must contain a photo.")
         return
 
+    # Check for parameter (yes/no)
+    include_buttons = True
+    if len(message.command) >= 2:
+        param = message.command[1].lower()
+        if param == "no":
+            include_buttons = False
+        elif param != "yes":
+            await message.reply("Usage: /publishupdates <yes|no>")
+            return
+
     try:
         # Copy the message with the image to the updates channel
         update_channel = -1003307506115
-        await client.copy_message(
+        update_sticker = "CAACAgUAAxkBAAOXaeUiJNVeBbgSpicTUbvvVllB8JYAAoweAALZY2BVBctCzpA2xKseBA"
+        
+        # Send image first with or without buttons
+        if include_buttons:
+            buttons = [
+                [
+                    InlineKeyboardButton("ᴍᴏᴠɪᴇꜱ", url="https://t.me/+5FUtXWwDtTxhNTM1"),
+                    InlineKeyboardButton("ᴛᴠ ꜱᴇʀɪᴇꜱ", url="https://t.me/+8Ue11G48SfEzNjc9")
+                ],
+                [
+                    InlineKeyboardButton("ꜰʟɪxʏ ꜱᴇᴀʀᴄʜ ʙᴏᴛ", url="https://t.me/CSrchBot")
+                ]
+            ]
+            
+            await client.send_photo(
+                chat_id=update_channel,
+                photo=replied_message.photo.file_id,
+                caption=replied_message.caption or "",
+                parse_mode=enums.ParseMode.HTML,
+                reply_markup=InlineKeyboardMarkup(buttons)
+            )
+        else:
+            await client.copy_message(
+                chat_id=update_channel,
+                from_chat_id=replied_message.chat.id,
+                message_id=replied_message.id
+            )
+        
+        # Then send the sticker
+        await client.send_sticker(
             chat_id=update_channel,
-            from_chat_id=replied_message.chat.id,
-            message_id=replied_message.id
+            sticker=update_sticker
         )
 
         logger.info(
-            f"Admin {message.from_user.id} published an update to channel {update_channel}"
+            f"Admin {message.from_user.id} published an update to channel {update_channel} "
+            f"{'with buttons' if include_buttons else 'without buttons'}"
         )
 
         success_msg = (
             f"✅ <b>Update Published!</b>\n\n"
             f"<b>Channel:</b> <code>{update_channel}</code>\n"
-            f"<i>The image has been sent to the updates channel.</i>"
+            f"<i>The image {'with buttons' if include_buttons else 'without buttons'} and sticker have been sent.</i>"
         )
         await message.reply(success_msg, parse_mode=enums.ParseMode.HTML)
 
@@ -303,7 +343,8 @@ async def publish_updates_handler(client: Client, message: Message):
                     f"📢 <b>Update Published</b>\n\n"
                     f"<b>Admin:</b> {user_link}{username_str}\n"
                     f"<b>Admin ID:</b> <code>{user.id}</code>\n"
-                    f"<b>Channel:</b> <code>{update_channel}</code>"
+                    f"<b>Channel:</b> <code>{update_channel}</code>\n"
+                    f"<b>With Buttons:</b> {'Yes' if include_buttons else 'No'}"
                 )
                 await client.send_message(
                     log_channel,
