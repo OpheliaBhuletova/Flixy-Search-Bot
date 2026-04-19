@@ -9,7 +9,6 @@ from bot.config import settings
 from bot.utils.messages import Texts
 from bot.utils.cache import RuntimeCache
 from bot.utils.helpers import get_file_id
-from bot.utils.thumbnails_extractor import extract_thumbnail_from_document, get_document_info
 
 from database.users_chats_db import db
 
@@ -350,88 +349,3 @@ async def start_handler(client: Client, message: Message):
 
     data = message.command[1]
     ...
-
-
-# ─── EXTRACT THUMBNAIL ───────────────────────────────────────────────────
-
-@Client.on_message(filters.command("extractthumbnail") & filters.private)
-async def extract_thumbnail_command(client: Client, message: Message):
-    """Extract and send thumbnail from a document or video.
-    
-    Usage:
-    - Reply to a document/video with /extractthumbnail
-    - Send a document/video with /extractthumbnail command
-    """
-    
-    # Check if this is a reply to a message or if document is attached
-    target_message = None
-    
-    if message.reply_to_message:
-        target_message = message.reply_to_message
-    elif message.document:
-        target_message = message
-    
-    if not target_message or not target_message.document:
-        await message.reply(
-            "📎 <b>Usage:</b>\n\n"
-            "Please reply to a document or video with <code>/extractthumbnail</code> command.\n\n"
-            "<i>Examples:</i>\n"
-            "• Reply to any document/video and send <code>/extractthumbnail</code>\n"
-            "• Send a document/video with <code>/extractthumbnail</code> caption",
-            parse_mode=enums.ParseMode.HTML
-        )
-        return
-    
-    # Get document information
-    doc_info = await get_document_info(target_message)
-    
-    # Notify user that we're processing
-    status_msg = await message.reply("⏳ Extracting thumbnail...")
-    
-    try:
-        # Extract thumbnail
-        thumbnail_data = await extract_thumbnail_from_document(client, target_message)
-        
-        if not thumbnail_data:
-            await status_msg.edit(
-                f"❌ <b>No Thumbnail Found</b>\n\n"
-                f"<b>File:</b> {doc_info.get('file_name', 'Unknown')}\n"
-                f"<b>Size:</b> {doc_info.get('file_size', 'Unknown')} bytes\n\n"
-                f"<i>This document/video doesn't have an embedded thumbnail.</i>",
-                parse_mode=enums.ParseMode.HTML
-            )
-            return
-        
-        # Prepare caption with document information
-        caption = (
-            f"<b>🖼️ Extracted Thumbnail</b>\n\n"
-            f"<b>📁 File:</b> {doc_info.get('file_name', 'Unknown')}\n"
-            f"<b>📊 Size:</b> {doc_info.get('file_size', 'Unknown')} bytes\n"
-            f"<b>📝 Type:</b> {doc_info.get('mime_type', 'Unknown')}"
-        )
-        
-        if doc_info.get('thumbnail_dimensions'):
-            caption += f"\n<b>📐 Dimensions:</b> {doc_info.get('thumbnail_dimensions')}"
-        
-        # Send thumbnail as photo
-        await message.reply_photo(
-            photo=thumbnail_data,
-            caption=caption,
-            parse_mode=enums.ParseMode.HTML
-        )
-        
-        # Delete status message
-        await status_msg.delete()
-        
-        logger.info(
-            f"User {message.from_user.id} extracted thumbnail from: "
-            f"{doc_info.get('file_name', 'Unknown')}"
-        )
-        
-    except Exception as e:
-        logger.exception(f"Error extracting thumbnail: {e}")
-        await status_msg.edit(
-            f"❌ <b>Error Extracting Thumbnail</b>\n\n"
-            f"<code>{str(e)[:100]}</code>",
-            parse_mode=enums.ParseMode.HTML
-        )
