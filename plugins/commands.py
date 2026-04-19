@@ -287,12 +287,6 @@ async def publish_updates_handler(client: Client, message: Message):
         update_channel = -1003307506115
         update_sticker = "CAACAgUAAxkBAAOXaeUiJNVeBbgSpicTUbvvVllB8JYAAoweAALZY2BVBctCzpA2xKseBA"
         
-        # Resolve the peer first to avoid "Peer id invalid" error
-        try:
-            await client.get_chat(update_channel)
-        except Exception:
-            logger.exception("Failed to resolve peer for update channel")
-        
         # Send image first with or without buttons
         if include_buttons:
             buttons = [
@@ -305,13 +299,24 @@ async def publish_updates_handler(client: Client, message: Message):
                 ]
             ]
             
-            await client.send_photo(
-                chat_id=update_channel,
-                photo=replied_message.photo.file_id,
-                caption=replied_message.caption or "",
-                parse_mode=enums.ParseMode.HTML,
-                reply_markup=InlineKeyboardMarkup(buttons)
-            )
+            try:
+                caption_text = replied_message.caption or ""
+                formatted_caption = f"<b><i>{caption_text}</i></b>" if caption_text else ""
+                
+                await client.send_photo(
+                    chat_id=update_channel,
+                    photo=replied_message.photo.file_id,
+                    caption=formatted_caption,
+                    parse_mode=enums.ParseMode.HTML,
+                    reply_markup=InlineKeyboardMarkup(buttons)
+                )
+            except Exception as e:
+                logger.warning(f"Failed to send photo with buttons: {e}, falling back to copy_message")
+                await client.copy_message(
+                    chat_id=update_channel,
+                    from_chat_id=replied_message.chat.id,
+                    message_id=replied_message.id
+                )
         else:
             await client.copy_message(
                 chat_id=update_channel,
@@ -320,10 +325,13 @@ async def publish_updates_handler(client: Client, message: Message):
             )
         
         # Then send the sticker
-        await client.send_sticker(
-            chat_id=update_channel,
-            sticker=update_sticker
-        )
+        try:
+            await client.send_sticker(
+                chat_id=update_channel,
+                sticker=update_sticker
+            )
+        except Exception as e:
+            logger.warning(f"Failed to send sticker: {e}")
 
         logger.info(
             f"Admin {message.from_user.id} published an update to channel {update_channel} "
