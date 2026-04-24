@@ -319,11 +319,11 @@ async def publish_updates_handler(client: Client, message: Message):
                     InlineKeyboardButton("❤️", callback_data="emoji_love")
                 ],
                 [
-                    InlineKeyboardButton("ᴍᴏᴠɪᴇꜱ", url="https://t.me/+5FUtXWwDtTxhNTM1"),
-                    InlineKeyboardButton("ᴛᴠ ꜱᴇʀɪᴇꜱ", url="https://t.me/+8Ue11G48SfEzNjc9")
+                    InlineKeyboardButton("🟢ᴍᴏᴠɪᴇꜱ", url="https://t.me/+5FUtXWwDtTxhNTM1"),
+                    InlineKeyboardButton("🔵ᴛᴠ ꜱᴇʀɪᴇꜱ", url="https://t.me/+8Ue11G48SfEzNjc9")
                 ],
                 [
-                    InlineKeyboardButton("ꜰʟɪxʏ ꜱᴇᴀʀᴄʜ ʙᴏᴛ", url="https://t.me/CSrchBot")
+                    InlineKeyboardButton("🟡 ꜰʟɪxʏ ꜱᴇᴀʀᴄʜ ʙᴏᴛ", url="https://t.me/CSrchBot")
                 ]
             ]
             
