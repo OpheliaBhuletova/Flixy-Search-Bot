@@ -374,6 +374,7 @@ async def publish_updates_handler(client: Client, message: Message):
         if message.text:
             # Remove the command part to get the actual message text
             text_parts = message.text.split(None, 1)  # Split on first whitespace
+            print(f"Command parts: {text_parts} and message text: {message.text}")
             reply_text = text_parts[1] if len(text_parts) > 1 else ""
         else:
             reply_text = ""
