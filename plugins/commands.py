@@ -311,21 +311,6 @@ async def publish_updates_handler(client: Client, message: Message):
             )
             return
         
-        # Verify bot can access the channel
-        try:
-            await client.get_chat(update_channel)
-        except Exception as e:
-            await message.reply(
-                f"❌ Cannot access updates channel.\n\n"
-                f"Make sure:\n"
-                f"1. The bot is added as a member to the channel\n"
-                f"2. The bot has permission to post messages\n"
-                f"3. Channel ID is correct: <code>{update_channel}</code>\n\n"
-                f"Error: {str(e)}"
-            )
-            logger.exception(f"Failed to access updates channel {update_channel}")
-            return
-        
         update_sticker = "CAACAgUAAxkBAAOXaeUiJNVeBbgSpicTUbvvVllB8JYAAoweAALZY2BVBctCzpA2xKseBA"
         
         # Prepare formatted caption (always bold and italics)
@@ -342,11 +327,11 @@ async def publish_updates_handler(client: Client, message: Message):
                         InlineKeyboardButton("❤️", callback_data="emoji_love")
                     ],
                     [
-                        InlineKeyboardButton("🟢ᴍᴏᴠɪᴇꜱ", url="https://t.me/+5FUtXWwDtTxhNTM1"),
-                        InlineKeyboardButton("🔵ᴛᴠ ꜱᴇʀɪᴇꜱ", url="https://t.me/+8Ue11G48SfEzNjc9")
+                        InlineKeyboardButton("Movies", url="https://t.me/+5FUtXWwDtTxhNTM1"),
+                        InlineKeyboardButton("TV Series", url="https://t.me/+8Ue11G48SfEzNjc9")
                     ],
                     [
-                        InlineKeyboardButton("🟡 ꜰʟɪxʏ ꜱᴇᴀʀᴄʜ ʙᴏᴛ", url="https://t.me/CSrchBot")
+                        InlineKeyboardButton("Flixy Search Bot", url="https://t.me/CSrchBot")
                     ]
                 ]
                 
