@@ -318,6 +318,7 @@ async def publish_updates_handler(client: Client, message: Message):
         formatted_caption = f"<b><i>{caption_text}</i></b>" if caption_text else ""
         
         # Send image first with or without buttons
+        fallback_used = False
         try:
             if include_buttons:
                 buttons = [
@@ -374,6 +375,7 @@ async def publish_updates_handler(client: Client, message: Message):
                         )
                     await botapi_send_message(client.bot_token, update_channel, fallback_text)
                     logger.info("Sent update to %s using Bot API fallback", update_channel)
+                    fallback_used = True
                 except Exception as fallback_exc:
                     logger.exception(f"Bot API fallback also failed for update to {update_channel}: {fallback_exc}")
                     raise exc  # re-raise original exception
@@ -383,13 +385,21 @@ async def publish_updates_handler(client: Client, message: Message):
         logger.info(
             f"Admin {message.from_user.id} published an update to channel {update_channel} "
             f"{'with buttons' if include_buttons else 'without buttons'}"
+            f"{' (fallback used)' if fallback_used else ''}"
         )
 
-        success_msg = (
-            f"✅ <b>Update Published!</b>\n\n"
-            f"<b>Channel:</b> <code>{update_channel}</code>\n"
-            f"<i>The image {'with buttons' if include_buttons else 'without buttons'} and sticker have been sent.</i>"
-        )
+        if fallback_used:
+            success_msg = (
+                f"✅ <b>Update Published via Fallback!</b>\n\n"
+                f"<b>Channel:</b> <code>{update_channel}</code>\n"
+                f"<i>The update text {'with links' if include_buttons else 'without links'} has been sent.</i>"
+            )
+        else:
+            success_msg = (
+                f"✅ <b>Update Published!</b>\n\n"
+                f"<b>Channel:</b> <code>{update_channel}</code>\n"
+                f"<i>The image {'with buttons' if include_buttons else 'without buttons'} and sticker have been sent.</i>"
+            )
         await message.reply(success_msg, parse_mode=enums.ParseMode.HTML)
 
         # Log to LOG_CHANNEL
