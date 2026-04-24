@@ -369,12 +369,13 @@ async def publish_updates_handler(client: Client, message: Message):
                 await message.reply("Usage (photo): /publishupdates yes|no")
                 return
     else:
-        # Link mode: extract message text from command
-        if len(message.command) >= 2:
-            # Get everything after the command
-            reply_text = " ".join(message.command[1:])
+        # Link mode: extract message text (everything after /publishupdates command)
+        if message.text:
+            # Remove the command part to get the actual message text
+            text_parts = message.text.split(None, 1)  # Split on first whitespace
+            reply_text = text_parts[1] if len(text_parts) > 1 else ""
         else:
-            reply_text = ""  # Empty reply if no text provided
+            reply_text = ""
 
     try:
         # Get updates channel from config
