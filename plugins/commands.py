@@ -370,12 +370,14 @@ async def publish_updates_handler(client: Client, message: Message):
                 await message.reply("Usage (photo): /publishupdates yes|no")
                 return
     else:
-        # Link mode: extract message text (everything after /publishupdates command)
+        # Link mode: extract message text inside double quotes
         if message.text:
-            # Remove the command part to get the actual message text
-            text_parts = message.text.split(None, 1)  # Split on first whitespace
-            print(f"Command parts: {text_parts} and message text: {message.text}")
-            reply_text = text_parts[1] if len(text_parts) > 1 else ""
+            # Look for text inside double quotes
+            quote_match = re.search(r'\"(.+?)\"', message.text)
+            if quote_match:
+                reply_text = quote_match.group(1)
+            else:
+                reply_text = ""
         else:
             reply_text = ""
 
