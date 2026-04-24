@@ -1,6 +1,8 @@
 import random
 import asyncio
 import logging
+import re
+import html
 import aiohttp
 
 from pyrogram import Client, filters, enums
@@ -32,7 +34,64 @@ async def botapi_send_message(token: str, chat_id: int, text: str) -> None:
                 raise RuntimeError(data)
 
 
+def extract_tg_post_id(text: str) -> int | None:
+    if not text:
+        return None
+
+    patterns = [
+        r"(?:https?://)?t\.me/(?:c/[^/]+|[^/]+)/(?P<id>\d+)",
+        r"tg://resolve\?[^\s]*post=(?P<id>\d+)"
+    ]
+    for pattern in patterns:
+        match = re.search(pattern, text)
+        if match:
+            return int(match.group("id"))
+    return None
+
+
+def extract_tg_post_id_from_message(message: Message) -> int | None:
+    return extract_tg_post_id(message.text or "") or extract_tg_post_id(message.caption or "")
+
+
 BATCH_FILES: dict = {}
+
+
+# ─── Link parsing helpers ────────────────────────────────────────────────
+def extract_channel_post_id(text: str) -> tuple[str, int] | None:
+    """Extract channel username/ID and message ID from Telegram post link.
+    
+    Supports:
+    - https://t.me/channel_username/12345
+    - https://t.me/c/123456789/12345
+    - tg://resolve?domain=channel_username&msgId=12345
+    
+    Returns: (channel_identifier, message_id) or None if not found
+    """
+    if not text:
+        return None
+    
+    # Pattern 1: https://t.me/username/message_id
+    match = re.search(r'https://t\.me/([a-zA-Z0-9_]+)/(\d+)', text)
+    if match:
+        return (match.group(1), int(match.group(2)))
+    
+    # Pattern 2: https://t.me/c/channel_id/message_id
+    match = re.search(r'https://t\.me/c/(\d+)/(\d+)', text)
+    if match:
+        channel_id = -100 * int(match.group(1)) if int(match.group(1)) > 0 else int(match.group(1))
+        return (channel_id, int(match.group(2)))
+    
+    # Pattern 3: tg://resolve?domain=username&msgId=12345
+    match = re.search(r'tg://resolve\?domain=([a-zA-Z0-9_]+)&msgId=(\d+)', text)
+    if match:
+        return (match.group(1), int(match.group(2)))
+    
+    return None
+
+
+def is_telegram_post_link(text: str) -> bool:
+    """Check if text contains a Telegram channel post link."""
+    return extract_channel_post_id(text) is not None
 
 
 # ─── START / GENID ────────────────────────────────────────────────────
@@ -269,36 +328,54 @@ async def ad_toggle_handler(client: Client, message: Message):
 
 @Client.on_message(filters.command("publishupdates") & filters.private)
 async def publish_updates_handler(client: Client, message: Message):
-    """Publish an image to the updates channel (admin only).
+    """Publish to updates channel (admin only).
 
     Usage:
-    - Reply to a message with an image: /publishupdates yes (with buttons)
-    - Reply to a message with an image: /publishupdates no (without buttons)
+    - Reply to a photo: /publishupdates yes (with buttons) or /publishupdates no (without buttons)
+    - Reply to a Telegram post link: /publishupdates New message text
     """
     if message.from_user.id not in settings.ADMINS:
         await message.reply("❌ This command is restricted to administrators only.")
         return
 
     if not message.reply_to_message:
-        await message.reply("❌ Please reply to a message with an image.")
+        await message.reply("❌ Please reply to a message.")
         return
 
     replied_message = message.reply_to_message
 
-    # Check if the replied message has a photo
-    if not replied_message.photo:
-        await message.reply("❌ The replied message must contain a photo.")
+    # Determine mode: photo or link
+    is_photo_mode = bool(replied_message.photo)
+    is_link_mode = bool(replied_message.text and is_telegram_post_link(replied_message.text))
+
+    if not is_photo_mode and not is_link_mode:
+        await message.reply(
+            "❌ Please reply to either:\n"
+            "1️⃣ A photo (then use: /publishupdates yes/no)\n"
+            "2️⃣ A Telegram post link (then use: /publishupdates Your message text)"
+        )
         return
 
-    # Check for parameter (yes/no)
+    # Parse parameters based on mode
     include_buttons = True
-    if len(message.command) >= 2:
-        param = message.command[1].lower()
-        if param == "no":
-            include_buttons = False
-        elif param != "yes":
-            await message.reply("Usage: /publishupdates <yes|no>")
-            return
+    reply_text = None
+    
+    if is_photo_mode:
+        # Photo mode: parse yes/no
+        if len(message.command) >= 2:
+            param = message.command[1].lower()
+            if param == "no":
+                include_buttons = False
+            elif param != "yes":
+                await message.reply("Usage (photo): /publishupdates yes|no")
+                return
+    else:
+        # Link mode: extract message text from command
+        if len(message.command) >= 2:
+            # Get everything after the command
+            reply_text = " ".join(message.command[1:])
+        else:
+            reply_text = ""  # Empty reply if no text provided
 
     try:
         # Get updates channel from config
@@ -312,85 +389,143 @@ async def publish_updates_handler(client: Client, message: Message):
             return
         
         update_sticker = "CAACAgUAAxkBAAOXaeUiJNVeBbgSpicTUbvvVllB8JYAAoweAALZY2BVBctCzpA2xKseBA"
+        fallback_used = False
         
-        # Prepare formatted caption (always bold and italics)
-        caption_text = replied_message.caption or ""
-        formatted_caption = f"<b><i>{caption_text}</i></b>" if caption_text else ""
-        
-        # Send image first with or without buttons
-        try:
-            if include_buttons:
-                buttons = [
-                    [
-                        InlineKeyboardButton("👍", callback_data="emoji_thumbs_up"),
-                        InlineKeyboardButton("👎", callback_data="emoji_thumbs_down"),
-                        InlineKeyboardButton("❤️", callback_data="emoji_love")
-                    ],
-                    [
-                        InlineKeyboardButton("Movies", url="https://t.me/+5FUtXWwDtTxhNTM1"),
-                        InlineKeyboardButton("TV Series", url="https://t.me/+8Ue11G48SfEzNjc9")
-                    ],
-                    [
-                        InlineKeyboardButton("Flixy Search Bot", url="https://t.me/CSrchBot")
-                    ]
-                ]
-                
-                await client.send_photo(
-                    chat_id=update_channel,
-                    photo=replied_message.photo.file_id,
-                    caption=formatted_caption,
-                    parse_mode=enums.ParseMode.HTML,
-                    reply_markup=InlineKeyboardMarkup(buttons)
-                )
-            else:
-                await client.send_photo(
-                    chat_id=update_channel,
-                    photo=replied_message.photo.file_id,
-                    caption=formatted_caption,
-                    parse_mode=enums.ParseMode.HTML
-                )
+        # ──── PHOTO MODE ────
+        if is_photo_mode:
+            # Prepare formatted caption (always bold and italics)
+            caption_text = replied_message.caption or ""
+            formatted_caption = f"<b><i>{caption_text}</i></b>" if caption_text else ""
             
-            # Then send the sticker
-            await client.send_sticker(
-                chat_id=update_channel,
-                sticker=update_sticker
+            try:
+                if include_buttons:
+                    buttons = [
+                        [
+                            InlineKeyboardButton("👍", callback_data="emoji_thumbs_up"),
+                            InlineKeyboardButton("👎", callback_data="emoji_thumbs_down"),
+                            InlineKeyboardButton("❤️", callback_data="emoji_love")
+                        ],
+                        [
+                            InlineKeyboardButton("Movies", url="https://t.me/+5FUtXWwDtTxhNTM1"),
+                            InlineKeyboardButton("TV Series", url="https://t.me/+8Ue11G48SfEzNjc9")
+                        ],
+                        [
+                            InlineKeyboardButton("Flixy Search Bot", url="https://t.me/CSrchBot")
+                        ]
+                    ]
+                    
+                    await client.send_photo(
+                        chat_id=update_channel,
+                        photo=replied_message.photo.file_id,
+                        caption=formatted_caption,
+                        parse_mode=enums.ParseMode.HTML,
+                        reply_markup=InlineKeyboardMarkup(buttons)
+                    )
+                else:
+                    await client.send_photo(
+                        chat_id=update_channel,
+                        photo=replied_message.photo.file_id,
+                        caption=formatted_caption,
+                        parse_mode=enums.ParseMode.HTML
+                    )
+                
+                # Then send the sticker
+                await client.send_sticker(
+                    chat_id=update_channel,
+                    sticker=update_sticker
+                )
+            except Exception as exc:
+                is_peer_error = (
+                    (isinstance(exc, ValueError) and "Peer id invalid" in str(exc))
+                    or isinstance(exc, PeerIdInvalid)
+                )
+                if is_peer_error:
+                    try:
+                        fallback_text = f"<b>📢 New Update</b>\n\n{formatted_caption}\n\n"
+                        if include_buttons:
+                            fallback_text += (
+                                "🟢 <a href='https://t.me/+5FUtXWwDtTxhNTM1'>ᴍᴏᴠɪᴇꜱ</a> | "
+                                "🔵 <a href='https://t.me/+8Ue11G48SfEzNjc9'>ᴛᴠ ꜱᴇʀɪᴇꜱ</a>\n"
+                                "🟡 <a href='https://t.me/CSrchBot'>ꜰʟɪxʏ ꜱᴇᴀʀᴄʜ ʙᴏᴛ</a>"
+                            )
+                        await botapi_send_message(client.bot_token, update_channel, fallback_text)
+                        logger.info("Sent update to %s using Bot API fallback", update_channel)
+                        fallback_used = True
+                    except Exception as fallback_exc:
+                        logger.exception(f"Bot API fallback also failed for update to {update_channel}: {fallback_exc}")
+                        raise exc
+                else:
+                    raise
+
+            logger.info(
+                f"Admin {message.from_user.id} published photo update to channel {update_channel} "
+                f"{'with buttons' if include_buttons else 'without buttons'}"
+                f"{' (fallback used)' if fallback_used else ''}"
             )
-        except Exception as exc:
-            # if peer is invalid (ValueError from utils or PeerIdInvalid),
-            # try sending via Bot API instead of logging an error.
-            is_peer_error = (
-                (isinstance(exc, ValueError) and "Peer id invalid" in str(exc))
-                or isinstance(exc, PeerIdInvalid)
-            )
-            if is_peer_error:
-                try:
-                    # Create fallback text message
-                    fallback_text = f"<b>📢 New Update</b>\n\n{formatted_caption}\n\n"
-                    if include_buttons:
-                        fallback_text += (
-                            "🟢 <a href='https://t.me/+5FUtXWwDtTxhNTM1'>ᴍᴏᴠɪᴇꜱ</a> | "
-                            "🔵 <a href='https://t.me/+8Ue11G48SfEzNjc9'>ᴛᴠ ꜱᴇʀɪᴇꜱ</a>\n"
-                            "🟡 <a href='https://t.me/CSrchBot'>ꜰʟɪxʏ ꜱᴇᴀʀᴄʜ ʙᴏᴛ</a>"
-                        )
-                    await botapi_send_message(client.bot_token, update_channel, fallback_text)
-                    logger.info("Sent update to %s using Bot API fallback", update_channel)
-                except Exception as fallback_exc:
-                    logger.exception(f"Bot API fallback also failed for update to {update_channel}: {fallback_exc}")
-                    raise exc  # re-raise original exception
+
+            if fallback_used:
+                success_msg = (
+                    f"✅ <b>Update Published via Fallback!</b>\n\n"
+                    f"<b>Channel:</b> <code>{update_channel}</code>\n"
+                    f"<i>The update text {'with links' if include_buttons else 'without links'} has been sent.</i>"
+                )
             else:
-                raise
-
-        logger.info(
-            f"Admin {message.from_user.id} published an update to channel {update_channel} "
-            f"{'with buttons' if include_buttons else 'without buttons'}"
-        )
-
-        success_msg = (
-            f"✅ <b>Update Published!</b>\n\n"
-            f"<b>Channel:</b> <code>{update_channel}</code>\n"
-            f"<i>The image {'with buttons' if include_buttons else 'without buttons'} and sticker have been sent.</i>"
-        )
-        await message.reply(success_msg, parse_mode=enums.ParseMode.HTML)
+                success_msg = (
+                    f"✅ <b>Update Published!</b>\n\n"
+                    f"<b>Channel:</b> <code>{update_channel}</code>\n"
+                    f"<i>The image {'with buttons' if include_buttons else 'without buttons'} and sticker have been sent.</i>"
+                )
+            await message.reply(success_msg, parse_mode=enums.ParseMode.HTML)
+        
+        # ──── LINK MODE ────
+        else:
+            # Extract channel and message ID from link
+            link_result = extract_channel_post_id(replied_message.text)
+            if not link_result:
+                await message.reply("❌ Could not parse Telegram post link.")
+                return
+            
+            channel_identifier, original_msg_id = link_result
+            
+            # Send reply to the linked post
+            try:
+                await client.send_message(
+                    chat_id=update_channel,
+                    text=reply_text or "[Reply sent by admin]",
+                    parse_mode=enums.ParseMode.HTML,
+                    reply_to_message_id=original_msg_id
+                )
+                logger.info(
+                    f"Admin {message.from_user.id} published reply to post {original_msg_id} in channel {update_channel}"
+                )
+                success_msg = (
+                    f"✅ <b>Reply Published!</b>\n\n"
+                    f"<b>Channel:</b> <code>{update_channel}</code>\n"
+                    f"<b>Reply to:</b> <code>{original_msg_id}</code>\n"
+                    f"<i>Your reply has been sent to the post.</i>"
+                )
+                await message.reply(success_msg, parse_mode=enums.ParseMode.HTML)
+            except Exception as exc:
+                is_peer_error = (
+                    (isinstance(exc, ValueError) and "Peer id invalid" in str(exc))
+                    or isinstance(exc, PeerIdInvalid)
+                )
+                if is_peer_error:
+                    try:
+                        fallback_text = f"{reply_text or '[Reply sent by admin]'}"
+                        await botapi_send_message(client.bot_token, update_channel, fallback_text)
+                        logger.info("Sent reply to %s using Bot API fallback", update_channel)
+                        await message.reply(
+                            f"✅ <b>Reply Published via Fallback!</b>\n\n"
+                            f"<b>Channel:</b> <code>{update_channel}</code>\n"
+                            f"<i>Your reply has been sent as a standalone message.</i>",
+                            parse_mode=enums.ParseMode.HTML
+                        )
+                    except Exception as fallback_exc:
+                        logger.exception(f"Bot API fallback also failed for reply to {update_channel}: {fallback_exc}")
+                        raise exc
+                else:
+                    raise
 
         # Log to LOG_CHANNEL
         log_channel = getattr(settings, "LOG_CHANNEL", 0)
@@ -400,13 +535,24 @@ async def publish_updates_handler(client: Client, message: Message):
                 user_link = f"<a href='tg://user?id={user.id}'>{user.first_name}</a>"
                 username_str = f" (@{user.username})" if user.username else ""
 
-                log_msg = (
-                    f"📢 <b>Update Published</b>\n\n"
-                    f"<b>Admin:</b> {user_link}{username_str}\n"
-                    f"<b>Admin ID:</b> <code>{user.id}</code>\n"
-                    f"<b>Channel:</b> <code>{update_channel}</code>\n"
-                    f"<b>With Buttons:</b> {'Yes' if include_buttons else 'No'}"
-                )
+                if is_photo_mode:
+                    log_msg = (
+                        f"📢 <b>Photo Update Published</b>\n\n"
+                        f"<b>Admin:</b> {user_link}{username_str}\n"
+                        f"<b>Admin ID:</b> <code>{user.id}</code>\n"
+                        f"<b>Channel:</b> <code>{update_channel}</code>\n"
+                        f"<b>With Buttons:</b> {'Yes' if include_buttons else 'No'}\n"
+                        f"<b>Method:</b> {'Primary' if not fallback_used else 'Fallback'}"
+                    )
+                else:
+                    log_msg = (
+                        f"💬 <b>Reply Published</b>\n\n"
+                        f"<b>Admin:</b> {user_link}{username_str}\n"
+                        f"<b>Admin ID:</b> <code>{user.id}</code>\n"
+                        f"<b>Channel:</b> <code>{update_channel}</code>\n"
+                        f"<b>Reply to Post:</b> <code>{original_msg_id}</code>\n"
+                        f"<b>Message:</b> <code>{html.escape(reply_text or '[No text]')}</code>"
+                    )
                 await client.send_message(
                     log_channel,
                     log_msg,
