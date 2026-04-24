@@ -78,6 +78,7 @@ def extract_channel_post_id(text: str) -> tuple[str, int] | None:
     # Pattern 2: https://t.me/c/channel_id/message_id
     match = re.search(r'https://t\.me/c/(\d+)/(\d+)', text)
     if match:
+        print(f"Extracted from /c/ link: channel_id={match.group(1)}, message_id={match.group(2)}")
         return (match.group(1), int(match.group(2)))
     
     # Pattern 3: tg://resolve?domain=username&msgId=12345
@@ -481,6 +482,7 @@ async def publish_updates_handler(client: Client, message: Message):
         else:
             # Extract channel and message ID from link
             link_result = extract_channel_post_id(replied_message.text)
+            print(f"Extracted from link: {link_result}")
             if not link_result:
                 await message.reply("❌ Could not parse Telegram post link.")
                 return
@@ -493,7 +495,8 @@ async def publish_updates_handler(client: Client, message: Message):
                     chat_id=update_channel,
                     text=reply_text or "[Reply sent by admin]",
                     parse_mode=enums.ParseMode.HTML,
-                    reply_to_message_id=original_msg_id
+                    reply_to_message_id=original_msg_id,
+                    quote=True
                 )
                 logger.info(
                     f"Admin {message.from_user.id} published reply to post {original_msg_id} in channel {update_channel}"
