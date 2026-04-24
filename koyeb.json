@@ -1,0 +1,10 @@
+{
+  "build": {
+    "docker": {
+      "dockerfile": "Dockerfile"
+    }
+  },
+  "run": {
+    "command": "python -m bot.main"
+  }
+}
