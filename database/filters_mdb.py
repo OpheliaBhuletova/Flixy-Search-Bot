@@ -1,7 +1,7 @@
 import logging
 from typing import List, Optional, Tuple
 
-from pyrogram import enums
+from kurigram import enums
 
 
 logger = logging.getLogger(__name__)

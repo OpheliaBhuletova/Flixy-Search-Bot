@@ -1,7 +1,7 @@
 import logging
 
-from pyrogram import Client, filters, enums
-from pyrogram.types import InlineKeyboardButton, InlineKeyboardMarkup, Message
+from kurigram import Client, filters, enums
+from kurigram.types import InlineKeyboardButton, InlineKeyboardMarkup, Message
 
 from bot.config import settings
 from database.connections_mdb import (

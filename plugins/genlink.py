@@ -4,9 +4,9 @@ import json
 import base64
 import logging
 
-from pyrogram import Client, filters, enums
-from pyrogram.types import Message
-from pyrogram.errors.exceptions.bad_request_400 import (
+from kurigram import Client, filters, enums
+from kurigram.types import Message
+from kurigram.errors.exceptions.bad_request_400 import (
     ChannelInvalid,
     UsernameInvalid,
     UsernameNotModified,

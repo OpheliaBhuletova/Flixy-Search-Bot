@@ -1,14 +1,14 @@
 import asyncio
 import logging
 import re
-from pyrogram import Client, enums
-from pyrogram.errors import (
+from kurigram import Client, enums
+from kurigram.errors import (
     InputUserDeactivated,
     UserIsBlocked,
     PeerIdInvalid,
     FloodWait,
 )
-from pyrogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton
+from kurigram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton
 from bot.utils.cache import RuntimeCache
 from bot.utils.helpers import schedule_delete_message
 from bot.config import settings

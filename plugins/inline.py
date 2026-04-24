@@ -1,13 +1,13 @@
 import logging
 
-from pyrogram import Client
-from pyrogram.types import (
+from kurigram import Client
+from kurigram.types import (
     InlineKeyboardButton,
     InlineKeyboardMarkup,
     InlineQueryResultCachedDocument,
     InlineQuery,
 )
-from pyrogram.errors.exceptions.bad_request_400 import QueryIdInvalid
+from kurigram.errors.exceptions.bad_request_400 import QueryIdInvalid
 
 from bot.config import settings
 from bot.utils.cache import RuntimeCache

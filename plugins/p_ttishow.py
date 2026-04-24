@@ -1,8 +1,8 @@
 import logging
-from pyrogram import Client, filters, enums
+from kurigram import Client, filters, enums
 import os
-from pyrogram.types import InlineKeyboardButton, InlineKeyboardMarkup
-from pyrogram.errors.exceptions.bad_request_400 import (
+from kurigram.types import InlineKeyboardButton, InlineKeyboardMarkup
+from kurigram.errors.exceptions.bad_request_400 import (
     MessageTooLong,
 )
 

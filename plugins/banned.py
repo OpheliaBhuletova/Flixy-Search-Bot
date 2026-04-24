@@ -1,5 +1,5 @@
-from pyrogram import Client, filters
-from pyrogram.types import Message, InlineKeyboardButton, InlineKeyboardMarkup
+from kurigram import Client, filters
+from kurigram.types import Message, InlineKeyboardButton, InlineKeyboardMarkup
 
 from bot.utils.cache import RuntimeCache
 from database.users_chats_db import db

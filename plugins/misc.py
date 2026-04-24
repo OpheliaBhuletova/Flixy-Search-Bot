@@ -5,16 +5,16 @@ import random
 from datetime import datetime
 import asyncio
 
-from pyrogram import Client, filters, enums
+from kurigram import Client, filters, enums
 from database.users_chats_db import db
-from pyrogram.types import (
+from kurigram.types import (
     InlineKeyboardMarkup,
     InlineKeyboardButton,
     CallbackQuery,
     Message,
     InputMediaPhoto,
 )
-from pyrogram.errors.exceptions.bad_request_400 import (
+from kurigram.errors.exceptions.bad_request_400 import (
     UserNotParticipant,
     MediaEmpty,
     PhotoInvalidDimensions,

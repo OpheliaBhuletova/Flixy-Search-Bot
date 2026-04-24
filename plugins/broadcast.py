@@ -3,9 +3,9 @@ import logging
 import time
 import datetime
 
-from pyrogram import Client, filters
-from pyrogram.types import Message
-from pyrogram.enums import ParseMode
+from kurigram import Client, filters
+from kurigram.types import Message
+from kurigram.enums import ParseMode
 
 from database.users_chats_db import db
 from bot.config import settings

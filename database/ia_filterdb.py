@@ -4,7 +4,7 @@ import base64
 from struct import pack
 from typing import Tuple, List
 
-from pyrogram.file_id import FileId
+from kurigram.file_id import FileId
 from pymongo.errors import DuplicateKeyError
 from marshmallow.exceptions import ValidationError
 

@@ -2,9 +2,9 @@ import asyncio
 import logging
 from typing import Union
 
-from pyrogram import enums
-from pyrogram.types import Message
-from pyrogram.errors import UserNotParticipant
+from kurigram import enums
+from kurigram.types import Message
+from kurigram.errors import UserNotParticipant
 
 from bot.config import settings
 from database.users_chats_db import get_db_instance

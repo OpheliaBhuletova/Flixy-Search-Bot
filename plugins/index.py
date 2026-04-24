@@ -4,15 +4,15 @@ import asyncio
 import logging
 
 
-from pyrogram import Client, filters, enums
-from pyrogram.types import (
+from kurigram import Client, filters, enums
+from kurigram.types import (
     InlineKeyboardMarkup,
     InlineKeyboardButton,
     CallbackQuery,
     Message,
 )
-from pyrogram.errors import FloodWait
-from pyrogram.errors.exceptions.bad_request_400 import (
+from kurigram.errors import FloodWait
+from kurigram.errors.exceptions.bad_request_400 import (
     ChannelInvalid,
     ChatAdminRequired,
     UsernameInvalid,

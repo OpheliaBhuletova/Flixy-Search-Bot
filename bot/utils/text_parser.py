@@ -1,5 +1,5 @@
 import re
-from pyrogram.types import InlineKeyboardButton
+from kurigram.types import InlineKeyboardButton
 
 SMART_OPEN = "“"
 SMART_CLOSE = "”"

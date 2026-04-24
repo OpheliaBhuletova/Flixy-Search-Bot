@@ -4,10 +4,10 @@ import ast
 import math
 import logging
 
-from pyrogram import Client, filters, enums
-from pyrogram.types import InlineKeyboardMarkup, InlineKeyboardButton, CallbackQuery
-from pyrogram.errors import FloodWait, UserIsBlocked, MessageNotModified, PeerIdInvalid
-from pyrogram.errors.exceptions.bad_request_400 import (
+from kurigram import Client, filters, enums
+from kurigram.types import InlineKeyboardMarkup, InlineKeyboardButton, CallbackQuery
+from kurigram.errors import FloodWait, UserIsBlocked, MessageNotModified, PeerIdInvalid
+from kurigram.errors.exceptions.bad_request_400 import (
     MediaEmpty,
     PhotoInvalidDimensions,
     WebpageMediaEmpty,

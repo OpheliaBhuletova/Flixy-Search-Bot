@@ -1,7 +1,7 @@
 import io
 
-from pyrogram import Client, filters, enums
-from pyrogram.types import Message
+from kurigram import Client, filters, enums
+from kurigram.types import Message
 
 from bot.config import settings
 from database.filters_mdb import (

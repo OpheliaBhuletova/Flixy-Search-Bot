@@ -8,13 +8,13 @@ from typing import AsyncGenerator, Optional, Union
 
 import aiohttp
 from aiohttp import web
-from pyrogram import Client, __version__, idle, types, enums
-from pyrogram.errors import FloodWait, PeerIdInvalid
+from kurigram import Client, __version__, idle, types, enums
+from kurigram.errors import FloodWait, PeerIdInvalid
 
 from bot.config import LOG_STR, settings
 from bot.utils.cache import RuntimeCache
 from bot.utils.helpers import schedule_delete_message
-from pyrogram.types import InlineKeyboardButton, InlineKeyboardMarkup
+from kurigram.types import InlineKeyboardButton, InlineKeyboardMarkup
 from database.ia_filterdb import Media
 from database.users_chats_db import get_db_instance
 from plugins import web_server
@@ -25,7 +25,7 @@ os.makedirs("logs", exist_ok=True)
 logging.config.fileConfig("bot/logging.conf", disable_existing_loggers=False)
 
 logger = logging.getLogger(__name__)
-logging.getLogger("pyrogram").setLevel(logging.ERROR)
+logging.getLogger("kurigram").setLevel(logging.ERROR)
 logging.getLogger("imdbpy").setLevel(logging.ERROR)
 logging.getLogger("httpx").setLevel(logging.WARNING)
 logging.getLogger("aiohttp.access").setLevel(logging.WARNING)
@@ -33,7 +33,7 @@ logging.getLogger("aiohttp.access").setLevel(logging.WARNING)
 PORT = int(os.getenv("PORT", 8080))
 
 
-# ─── Startup log helper (Pyrogram -> Bot API fallback) ────────────────
+# ─── Startup log helper (Kurigram -> Bot API fallback) ────────────────
 async def botapi_send_message(token: str, chat_id: int, text: str) -> None:
     url = f"https://api.telegram.org/bot{token}/sendMessage"
     payload = {
@@ -93,7 +93,7 @@ async def botapi_get_chat(token: str, chat_id: int) -> dict | None:
 
 
 async def get_chat_info(app: Client, chat_id: int) -> dict | None:
-    """Try Pyrogram first; fall back to Bot API for 'Peer id invalid' issue."""
+    """Try Kurigram first; fall back to Bot API for 'Peer id invalid' issue."""
     try:
         chat = await app.get_chat(chat_id)
         return {
@@ -145,7 +145,7 @@ class Bot(Client):
         site = web.TCPSite(runner, "0.0.0.0", PORT)
         await site.start()
 
-        # Start Pyrogram with FloodWait handling
+        # Start Kurigram with FloodWait handling
         while True:
             try:
                 await super().start()
@@ -192,7 +192,7 @@ class Bot(Client):
 
         self.username = f"@{me.username}"
 
-        logger.info("%s started with Pyrogram v%s as %s", me.first_name, __version__, self.username)
+        logger.info("%s started with Kurigram v%s as %s", me.first_name, __version__, self.username)
         logger.info(LOG_STR)
 
         # Startup log
@@ -304,7 +304,7 @@ class Bot(Client):
     ) -> Optional[AsyncGenerator[types.Message, None]]:
         """
         Legacy helper to iterate messages sequentially.
-        NOTE: Pyrogram already provides iter_messages().
+        NOTE: Kurigram already provides iter_messages().
         Kept for backward compatibility.
         """
         current = offset

@@ -1,6 +1,6 @@
-from pyrogram import Client, filters
+from kurigram import Client, filters
 
-from pyrogram.types import Message
+from kurigram.types import Message
 
 from bot.config import settings
 from database.ia_filterdb import save_file, announce_title
