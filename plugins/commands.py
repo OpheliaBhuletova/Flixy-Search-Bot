@@ -494,9 +494,10 @@ async def publish_updates_handler(client: Client, message: Message):
             
             # Send reply to the linked post
             try:
+                quoted_text = f"<blockquote>{reply_text}</blockquote>" if reply_text else "[Reply sent by admin]"
                 await client.send_message(
                     chat_id=update_channel,
-                    text=reply_text or "[Reply sent by admin]",
+                    text=quoted_text,
                     parse_mode=enums.ParseMode.HTML,
                     reply_to_message_id=original_msg_id
                 )
@@ -517,7 +518,7 @@ async def publish_updates_handler(client: Client, message: Message):
                 )
                 if is_peer_error:
                     try:
-                        fallback_text = f"{reply_text or '[Reply sent by admin]'}"
+                        fallback_text = f"<blockquote>{reply_text}</blockquote>" if reply_text else "[Reply sent by admin]"
                         await botapi_send_message(client.bot_token, update_channel, fallback_text)
                         logger.info("Sent reply to %s using Bot API fallback", update_channel)
                         await message.reply(
