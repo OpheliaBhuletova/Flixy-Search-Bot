@@ -28,6 +28,7 @@ from database.ia_filterdb import (
     Media,
     get_file_details,
     get_search_results,
+    save_file,
 )
 from database.filters_mdb import del_all, find_filter, get_filters
 from bot.utils.cache import RuntimeCache
@@ -83,16 +84,17 @@ async def private_message_router(client: Client, message):
 
 # -------- IMAGE FILE ID HANDLER IN PRIVATE MESSAGES -------- #
 
-@Client.on_message(filters.private & filters.photo & filters.incoming)
+@Client.on_message(filters.private & (filters.photo | filters.document) & filters.incoming)
 async def pm_image_file_id_handler(client: Client, message):
     """Handle images sent to bot PM and log file IDs.
     
-    When a user sends a photo or document to the bot, extract the file_id,
+    When a user sends a photo or image document to the bot, extract the file_id,
     print it to console logs, and send it to the configured LOG_CHANNEL.
+    If the image has no caption, store the file ID in the database.
     """
     file_info = get_file_id(message)
     
-    if file_info:
+    if file_info and (file_info.message_type == "photo" or (file_info.message_type == "document" and file_info.mime_type and file_info.mime_type.startswith("image/"))):
         user = message.from_user
         user_link = f"<a href='tg://user?id={user.id}'>{user.first_name}</a>"
         username_str = f" (@{user.username})" if user.username else ""
@@ -117,6 +119,24 @@ async def pm_image_file_id_handler(client: Client, message):
                 await client.send_message(log_channel, log_message, parse_mode=enums.ParseMode.HTML)
             except Exception:
                 logger.exception("Failed to send image file ID to LOG_CHANNEL")
+        
+        # Store file ID if no caption
+        if not message.caption or message.caption.strip() == "":
+            # Prepare media object for saving
+            if file_info.message_type == "photo":
+                file_info.file_name = "Photo"
+            else:
+                file_info.file_name = file_info.file_name or "Image"
+            file_info.file_type = file_info.message_type
+            file_info.caption = message.caption
+            
+            saved, reason, title = await save_file(file_info)
+            if saved:
+                logger.info(f"Stored file ID {file_info.file_id} in database")
+            elif reason == 0:
+                logger.info(f"File ID {file_info.file_id} already exists in database")
+            else:
+                logger.error(f"Failed to store file ID {file_info.file_id} in database")
 
 
 @Client.on_message(filters.command("setstartup") & filters.user(settings.ADMINS) & filters.private)
