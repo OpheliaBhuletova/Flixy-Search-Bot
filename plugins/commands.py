@@ -1,9 +1,11 @@
 import random
 import asyncio
 import logging
+import aiohttp
 
 from pyrogram import Client, filters, enums
 from pyrogram.types import InlineKeyboardButton, InlineKeyboardMarkup, Message
+from pyrogram.errors import PeerIdInvalid
 
 from bot.config import settings
 from bot.utils.messages import Texts
@@ -13,6 +15,22 @@ from bot.utils.helpers import get_file_id
 from database.users_chats_db import db
 
 logger = logging.getLogger(__name__)
+
+# ─── Bot API fallback helper ──────────────────────────────────────────
+async def botapi_send_message(token: str, chat_id: int, text: str) -> None:
+    url = f"https://api.telegram.org/bot{token}/sendMessage"
+    payload = {
+        "chat_id": chat_id,
+        "text": text,
+        "parse_mode": "HTML",
+        "disable_web_page_preview": True,
+    }
+    async with aiohttp.ClientSession() as session:
+        async with session.post(url, data=payload) as resp:
+            data = await resp.json()
+            if not data.get("ok"):
+                raise RuntimeError(data)
+
 
 BATCH_FILES: dict = {}
 
@@ -310,45 +328,72 @@ async def publish_updates_handler(client: Client, message: Message):
         
         update_sticker = "CAACAgUAAxkBAAOXaeUiJNVeBbgSpicTUbvvVllB8JYAAoweAALZY2BVBctCzpA2xKseBA"
         
-        # Send image first with or without buttons
-        if include_buttons:
-            buttons = [
-                [
-                    InlineKeyboardButton("👍", callback_data="emoji_thumbs_up"),
-                    InlineKeyboardButton("👎", callback_data="emoji_thumbs_down"),
-                    InlineKeyboardButton("❤️", callback_data="emoji_love")
-                ],
-                [
-                    InlineKeyboardButton("🟢ᴍᴏᴠɪᴇꜱ", url="https://t.me/+5FUtXWwDtTxhNTM1"),
-                    InlineKeyboardButton("🔵ᴛᴠ ꜱᴇʀɪᴇꜱ", url="https://t.me/+8Ue11G48SfEzNjc9")
-                ],
-                [
-                    InlineKeyboardButton("🟡 ꜰʟɪxʏ ꜱᴇᴀʀᴄʜ ʙᴏᴛ", url="https://t.me/CSrchBot")
-                ]
-            ]
-            
-            caption_text = replied_message.caption or ""
-            formatted_caption = f"<b><i>{caption_text}</i></b>" if caption_text else ""
-            
-            await client.send_photo(
-                chat_id=update_channel,
-                photo=replied_message.photo.file_id,
-                caption=formatted_caption,
-                parse_mode=enums.ParseMode.HTML,
-                reply_markup=InlineKeyboardMarkup(buttons)
-            )
-        else:
-            await client.copy_message(
-                chat_id=update_channel,
-                from_chat_id=replied_message.chat.id,
-                message_id=replied_message.id
-            )
+        # Prepare formatted caption (always bold and italics)
+        caption_text = replied_message.caption or ""
+        formatted_caption = f"<b><i>{caption_text}</i></b>" if caption_text else ""
         
-        # Then send the sticker
-        await client.send_sticker(
-            chat_id=update_channel,
-            sticker=update_sticker
-        )
+        # Send image first with or without buttons
+        try:
+            if include_buttons:
+                buttons = [
+                    [
+                        InlineKeyboardButton("👍", callback_data="emoji_thumbs_up"),
+                        InlineKeyboardButton("👎", callback_data="emoji_thumbs_down"),
+                        InlineKeyboardButton("❤️", callback_data="emoji_love")
+                    ],
+                    [
+                        InlineKeyboardButton("🟢ᴍᴏᴠɪᴇꜱ", url="https://t.me/+5FUtXWwDtTxhNTM1"),
+                        InlineKeyboardButton("🔵ᴛᴠ ꜱᴇʀɪᴇꜱ", url="https://t.me/+8Ue11G48SfEzNjc9")
+                    ],
+                    [
+                        InlineKeyboardButton("🟡 ꜰʟɪxʏ ꜱᴇᴀʀᴄʜ ʙᴏᴛ", url="https://t.me/CSrchBot")
+                    ]
+                ]
+                
+                await client.send_photo(
+                    chat_id=update_channel,
+                    photo=replied_message.photo.file_id,
+                    caption=formatted_caption,
+                    parse_mode=enums.ParseMode.HTML,
+                    reply_markup=InlineKeyboardMarkup(buttons)
+                )
+            else:
+                await client.send_photo(
+                    chat_id=update_channel,
+                    photo=replied_message.photo.file_id,
+                    caption=formatted_caption,
+                    parse_mode=enums.ParseMode.HTML
+                )
+            
+            # Then send the sticker
+            await client.send_sticker(
+                chat_id=update_channel,
+                sticker=update_sticker
+            )
+        except Exception as exc:
+            # if peer is invalid (ValueError from utils or PeerIdInvalid),
+            # try sending via Bot API instead of logging an error.
+            is_peer_error = (
+                (isinstance(exc, ValueError) and "Peer id invalid" in str(exc))
+                or isinstance(exc, PeerIdInvalid)
+            )
+            if is_peer_error:
+                try:
+                    # Create fallback text message
+                    fallback_text = f"<b>📢 New Update</b>\n\n{formatted_caption}\n\n"
+                    if include_buttons:
+                        fallback_text += (
+                            "🟢 <a href='https://t.me/+5FUtXWwDtTxhNTM1'>ᴍᴏᴠɪᴇꜱ</a> | "
+                            "🔵 <a href='https://t.me/+8Ue11G48SfEzNjc9'>ᴛᴠ ꜱᴇʀɪᴇꜱ</a>\n"
+                            "🟡 <a href='https://t.me/CSrchBot'>ꜰʟɪxʏ ꜱᴇᴀʀᴄʜ ʙᴏᴛ</a>"
+                        )
+                    await botapi_send_message(client.bot_token, update_channel, fallback_text)
+                    logger.info("Sent update to %s using Bot API fallback", update_channel)
+                except Exception as fallback_exc:
+                    logger.exception(f"Bot API fallback also failed for update to {update_channel}: {fallback_exc}")
+                    raise exc  # re-raise original exception
+            else:
+                raise
 
         logger.info(
             f"Admin {message.from_user.id} published an update to channel {update_channel} "
