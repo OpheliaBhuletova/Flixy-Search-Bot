@@ -1,5 +1,5 @@
 # Core Telegram framework
-git+https://github.com/kurigram/kurigram@main
+kurigram>=1.4.16
 tgcrypto
 
 # Database (async)
