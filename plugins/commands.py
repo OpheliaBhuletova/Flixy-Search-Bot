@@ -78,8 +78,7 @@ def extract_channel_post_id(text: str) -> tuple[str, int] | None:
     # Pattern 2: https://t.me/c/channel_id/message_id
     match = re.search(r'https://t\.me/c/(\d+)/(\d+)', text)
     if match:
-        channel_id = -100 * int(match.group(1)) if int(match.group(1)) > 0 else int(match.group(1))
-        return (channel_id, int(match.group(2)))
+        return (match.group(1), int(match.group(2)))
     
     # Pattern 3: tg://resolve?domain=username&msgId=12345
     match = re.search(r'tg://resolve\?domain=([a-zA-Z0-9_]+)&msgId=(\d+)', text)
