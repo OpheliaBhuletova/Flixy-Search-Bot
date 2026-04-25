@@ -212,11 +212,12 @@ async def imdb_search_handler(client: Client, message: Message):
     elif lowered.startswith("movie "):
         preferred_type = "movie"
 
-    status = await message.reply("Searching TMDb...")
+    status_msg = await client.send_message_draft(message.chat.id, "Searching TMDb...")
 
     results = await search_tmdb_titles(query, preferred_type=preferred_type, limit=10)
     if not results:
-        return await status.edit("No results found.")
+        await status_msg.delete()
+        return await message.reply("No results found.")
 
     buttons = [
         [
@@ -229,10 +230,11 @@ async def imdb_search_handler(client: Client, message: Message):
         for item in results
     ]
 
-    await status.edit(
+    await message.reply(
         "Here is what I found:",
         reply_markup=InlineKeyboardMarkup(buttons),
     )
+    await status_msg.delete()
 
 
 @Client.on_message(filters.command("imdbinfo"))
@@ -248,9 +250,9 @@ async def imdb_info_handler(client: Client, message: Message):
         )
 
     query = message.text.split(None, 1)[1]
-    status = await message.reply("Fetching metadata")
+    status_msg = await client.send_message_draft(message.chat.id, "Fetching metadata")
 
-    animation = asyncio.create_task(animate_search_message(status))
+    animation = asyncio.create_task(animate_search_message(status_msg))
     imdb = await get_imdb_info(query)
 
     animation.cancel()
@@ -260,12 +262,13 @@ async def imdb_info_handler(client: Client, message: Message):
         pass
 
     if not imdb:
-        return await status.edit(
+        await status_msg.delete()
+        return await message.reply(
             f"No results found for <b>{html.escape(query)}</b>.",
             parse_mode=enums.ParseMode.HTML,
         )
 
-    await status.edit("Found result ✔")
+    await status_msg.delete()
     await asyncio.sleep(0.4)
 
     msg = (
@@ -292,22 +295,21 @@ async def imdb_info_handler(client: Client, message: Message):
                 caption=msg,
                 parse_mode=enums.ParseMode.HTML,
             )
-            await status.delete()
         else:
-            await status.edit(
+            await message.reply_text(
                 msg,
                 parse_mode=enums.ParseMode.HTML,
                 disable_web_page_preview=True,
             )
     except (MediaEmpty, PhotoInvalidDimensions, WebpageMediaEmpty):
-        await status.edit(
+        await message.reply_text(
             msg,
             parse_mode=enums.ParseMode.HTML,
             disable_web_page_preview=True,
         )
     except Exception:
         logger.exception("Failed to send poster for /imdbinfo")
-        await status.edit(
+        await message.reply_text(
             msg,
             parse_mode=enums.ParseMode.HTML,
             disable_web_page_preview=True,
@@ -459,18 +461,10 @@ async def help_about_callback_handler(client: Client, callback: CallbackQuery):
     if data == "help":
         text = Texts.HELP_TXT
         parse_mode = enums.ParseMode.MARKDOWN
-        buttons = [
-            [
-                # Primary (Blue) for the main action
-                InlineKeyboardButton("🔍 Search", switch_inline_query_current_chat="", style=enums.ButtonStyle.PRIMARY),
-                InlineKeyboardButton("🤖 Updates", url="https://t.me/+w7aX0q-ex1U1NDc1", style=enums.ButtonStyle.SUCCESS),
-            ],
-            [
-                # Standard look for utility buttons (Help/About)
-                InlineKeyboardButton("❓ Help", callback_data="help", style=enums.ButtonStyle.PRIMARY),
-                InlineKeyboardButton("ℹ️ About", callback_data="about", style=enums.ButtonStyle.PRIMARY),
-            ],
-        ]
+        buttons = [[
+            InlineKeyboardButton("◀️ Back", callback_data="start", style=enums.ButtonStyle.PRIMARY),
+            InlineKeyboardButton("❌ Close", callback_data="close_data", style=enums.ButtonStyle.DANGER),
+        ]]
     elif data == "about":  # about
         text = Texts.ABOUT_TXT.format(
             client.me.first_name if client.me else "Bot"
