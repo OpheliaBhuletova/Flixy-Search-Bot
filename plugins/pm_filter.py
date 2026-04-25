@@ -217,14 +217,20 @@ async def next_page(client: Client, query: CallbackQuery):
         if settings_data["button"]:
             buttons.append([
                 InlineKeyboardButton(
-                    f"[{get_size(file.file_size)}] {file.file_name}",
+                    f"🎬 {file.file_name}",
                     callback_data=f"{pre}#{file.file_id}",
-                )
+                    style=enums.ButtonStyle.SUCCESS,
+                ),
+                InlineKeyboardButton(
+                    f"💾 {get_size(file.file_size)}",
+                    callback_data=f"{pre}#{file.file_id}",
+                    style=enums.ButtonStyle.PRIMARY,
+                ),
             ])
         else:
             buttons.append([
-                InlineKeyboardButton(file.file_name, callback_data=f"{pre}#{file.file_id}"),
-                InlineKeyboardButton(get_size(file.file_size), callback_data=f"{pre}#{file.file_id}"),
+                InlineKeyboardButton(file.file_name, callback_data=f"{pre}#{file.file_id}", style=enums.ButtonStyle.SUCCESS),
+                InlineKeyboardButton(get_size(file.file_size), callback_data=f"{pre}#{file.file_id}", style=enums.ButtonStyle.PRIMARY),
             ])
 
     page = math.ceil(offset / 10) + 1
@@ -233,14 +239,14 @@ async def next_page(client: Client, query: CallbackQuery):
     nav = []
     if offset > 0:
         nav.append(
-            InlineKeyboardButton("⏪ BACK", callback_data=f"next_{req}_{key}_{offset-10}")
+            InlineKeyboardButton("⏪ BACK", callback_data=f"next_{req}_{key}_{offset-10}", style=enums.ButtonStyle.PRIMARY)
         )
     nav.append(
-        InlineKeyboardButton(f"📃 {page}/{total_pages}", callback_data="pages")
+        InlineKeyboardButton(f"📃 {page}/{total_pages}", callback_data="pages", style=enums.ButtonStyle.SECONDARY)
     )
     if next_offset:
         nav.append(
-            InlineKeyboardButton("NEXT ⏩", callback_data=f"next_{req}_{key}_{next_offset}")
+            InlineKeyboardButton("NEXT ⏩", callback_data=f"next_{req}_{key}_{next_offset}", style=enums.ButtonStyle.PRIMARY)
         )
 
     buttons.append(nav)
@@ -357,11 +363,13 @@ async def auto_filter(client: Client, message, spoll=None):
     pre = "filep" if settings_data["file_secure"] else "file"
     buttons = []
 
-    for file in files:
+    for i, file in enumerate(files):
+        style = enums.ButtonStyle.PRIMARY if i % 2 == 0 else enums.ButtonStyle.DEFAULT
         buttons.append([
             InlineKeyboardButton(
-                f"[{get_size(file.file_size)}] {file.file_name}",
+                f"{file.file_name}",
                 callback_data=f"{pre}#{file.file_id}",
+                style=style,
             )
         ])
 
@@ -369,10 +377,11 @@ async def auto_filter(client: Client, message, spoll=None):
         key = f"{message.chat.id}-{message.id}"
         BUTTONS[key] = search
         buttons.append([
-            InlineKeyboardButton("🗓 1", callback_data="pages"),
+            InlineKeyboardButton("🗓 1", callback_data="pages", style=enums.ButtonStyle.PRIMARY),
             InlineKeyboardButton(
                 "NEXT ⏩",
                 callback_data=f"next_{message.from_user.id}_{key}_{offset}",
+                style=enums.ButtonStyle.PRIMARY,
             ),
         ])
 
@@ -423,10 +432,10 @@ async def spell_check(message):
     SPELL_CHECK[message.id] = results[:3]
 
     buttons = [
-        [InlineKeyboardButton(title, callback_data=f"spolling#{message.from_user.id}#{i}")]
+        [InlineKeyboardButton(title, callback_data=f"spolling#{message.from_user.id}#{i}", style=enums.ButtonStyle.PRIMARY)]
         for i, title in enumerate(results[:3])
     ]
-    buttons.append([InlineKeyboardButton("Close", callback_data="close_data")])
+    buttons.append([InlineKeyboardButton("Close", callback_data="close_data", style=enums.ButtonStyle.DANGER)])
 
     await message.reply(
         "Did you mean:",

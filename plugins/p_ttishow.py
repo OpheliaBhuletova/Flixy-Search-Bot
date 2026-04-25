@@ -47,7 +47,7 @@ async def on_bot_added(client: Client, message):
 
         if message.chat.id in RuntimeCache.banned_chats:
             markup = InlineKeyboardMarkup(
-                [[InlineKeyboardButton("Support", url=f"https://t.me/{settings.SUPPORT_CHAT}")]]
+                [[InlineKeyboardButton("Support", url=f"https://t.me/{settings.SUPPORT_CHAT}", style=enums.ButtonStyle.SUCCESS)]]
             )
             msg = await message.reply(
                 "<b>CHAT NOT ALLOWED \U0001f41e\n\n"
@@ -66,10 +66,12 @@ async def on_bot_added(client: Client, message):
                 InlineKeyboardButton(
                     "ℹ️ Help",
                     url=f"https://t.me/{RuntimeCache.bot_username}?start=help",
+                    style=enums.ButtonStyle.PRIMARY,
                 ),
                 InlineKeyboardButton(
                     "📢 Updates",
                     url="https://t.me/+w7aX0q-ex1U1NDc1",
+                    style=enums.ButtonStyle.SUCCESS,
                 ),
             ]]
         )
@@ -105,7 +107,7 @@ async def leave_chat_handler(client: Client, message):
         pass
 
     markup = InlineKeyboardMarkup(
-        [[InlineKeyboardButton("Support", url=f"https://t.me/{settings.SUPPORT_CHAT}")]]
+        [[InlineKeyboardButton("Support", url=f"https://t.me/{settings.SUPPORT_CHAT}", style=enums.ButtonStyle.SUCCESS)]]
     )
     
     try:
@@ -157,7 +159,7 @@ async def disable_chat_handler(client: Client, message):
     RuntimeCache.banned_chats.add(chat)
 
     markup = InlineKeyboardMarkup(
-        [[InlineKeyboardButton("Support", url=f"https://t.me/{settings.SUPPORT_CHAT}")]]
+        [[InlineKeyboardButton("Support", url=f"https://t.me/{settings.SUPPORT_CHAT}", style=enums.ButtonStyle.SUCCESS)]]
     )
     
     try:

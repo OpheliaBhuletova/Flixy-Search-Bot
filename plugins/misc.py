@@ -115,7 +115,7 @@ async def user_info_handler(client: Client, message):
         except UserNotParticipant:
             pass
 
-    buttons = [[InlineKeyboardButton("🔐 Close", callback_data="close_data")]]
+    buttons = [[InlineKeyboardButton("🔐 Close", callback_data="close_data", style=enums.ButtonStyle.DANGER)]]
     markup = InlineKeyboardMarkup(buttons)
 
     if user.photo:
@@ -212,26 +212,29 @@ async def imdb_search_handler(client: Client, message: Message):
     elif lowered.startswith("movie "):
         preferred_type = "movie"
 
-    status = await message.reply("Searching TMDb...")
+    status_msg = await client.send_message_draft(message.chat.id, "Searching TMDb...")
 
     results = await search_tmdb_titles(query, preferred_type=preferred_type, limit=10)
     if not results:
-        return await status.edit("No results found.")
+        await status_msg.delete()
+        return await message.reply("No results found.")
 
     buttons = [
         [
             InlineKeyboardButton(
                 text=f"{item['title']} - {item['year']} ({'TV' if item['media_type'] == 'tv' else 'Movie'})",
                 callback_data=f"imdb#{item['media_type']}#{item['id']}",
+                style=enums.ButtonStyle.PRIMARY,
             )
         ]
         for item in results
     ]
 
-    await status.edit(
+    await message.reply(
         "Here is what I found:",
         reply_markup=InlineKeyboardMarkup(buttons),
     )
+    await status_msg.delete()
 
 
 @Client.on_message(filters.command("imdbinfo"))
@@ -247,25 +250,48 @@ async def imdb_info_handler(client: Client, message: Message):
         )
 
     query = message.text.split(None, 1)[1]
-    status = await message.reply("Fetching metadata")
 
-    animation = asyncio.create_task(animate_search_message(status))
+    # Draft setup
+    draft_id = 1
+
+    # Initial draft message
+    await client.send_message_draft(
+        chat_id=message.chat.id,
+        draft_id=draft_id,
+        text="🔍 Fetching metadata..."
+    )
+
+    # Optional streaming effect
+    await asyncio.sleep(0.4)
+    await client.send_message_draft(
+        chat_id=message.chat.id,
+        draft_id=draft_id,
+        text="🔍 Fetching metadata.."
+    )
+
+    await asyncio.sleep(0.4)
+    await client.send_message_draft(
+        chat_id=message.chat.id,
+        draft_id=draft_id,
+        text="🔍 Fetching metadata..."
+    )
+
     imdb = await get_imdb_info(query)
 
-    animation.cancel()
-    try:
-        await animation
-    except asyncio.CancelledError:
-        pass
+    # Clear draft (send empty text → effectively removes it)
+    await client.send_message_draft(
+        chat_id=message.chat.id,
+        draft_id=draft_id,
+        text="Done ✅"
+    )
 
     if not imdb:
-        return await status.edit(
+        return await message.reply(
             f"No results found for <b>{html.escape(query)}</b>.",
             parse_mode=enums.ParseMode.HTML,
         )
 
-    await status.edit("Found result ✔")
-    await asyncio.sleep(0.4)
+    await asyncio.sleep(0.3)
 
     msg = (
         f"<b>{imdb['type_label']}:</b> <a href='{imdb['url']}'>{imdb['title']}</a> [{imdb['year']}]\n"
@@ -291,22 +317,21 @@ async def imdb_info_handler(client: Client, message: Message):
                 caption=msg,
                 parse_mode=enums.ParseMode.HTML,
             )
-            await status.delete()
         else:
-            await status.edit(
+            await message.reply_text(
                 msg,
                 parse_mode=enums.ParseMode.HTML,
                 disable_web_page_preview=True,
             )
     except (MediaEmpty, PhotoInvalidDimensions, WebpageMediaEmpty):
-        await status.edit(
+        await message.reply_text(
             msg,
             parse_mode=enums.ParseMode.HTML,
             disable_web_page_preview=True,
         )
     except Exception:
         logger.exception("Failed to send poster for /imdbinfo")
-        await status.edit(
+        await message.reply_text(
             msg,
             parse_mode=enums.ParseMode.HTML,
             disable_web_page_preview=True,
@@ -326,7 +351,7 @@ async def imdb_callback_handler(client: Client, callback: CallbackQuery):
         return await callback.answer("No data found.", show_alert=True)
 
     caption = settings.METADATA_TEMPLATE.format(**imdb, query=imdb["title"])
-    buttons = [[InlineKeyboardButton(imdb["title"], url=imdb["url"])]]
+    buttons = [[InlineKeyboardButton(imdb["title"], url=imdb["url"], style=enums.ButtonStyle.SUCCESS)]]
     markup = InlineKeyboardMarkup(buttons)
 
     # Check if poster exists and is valid
@@ -389,12 +414,12 @@ async def help_about_callback_handler(client: Client, callback: CallbackQuery):
     if data == "start":
         buttons = [
             [
-                InlineKeyboardButton("🔍 Search", switch_inline_query_current_chat=""),
-                InlineKeyboardButton("🤖 Updates", url="https://t.me/+w7aX0q-ex1U1NDc1"),
+                InlineKeyboardButton("🔍 Search", switch_inline_query_current_chat="", style=enums.ButtonStyle.SUCCESS),
+                InlineKeyboardButton("🤖 Updates", url="https://t.me/+w7aX0q-ex1U1NDc1", style=enums.ButtonStyle.PRIMARY),
             ],
             [
-                InlineKeyboardButton("❓Help", callback_data="help"),
-                InlineKeyboardButton("ℹ️ About", callback_data="about"),
+                InlineKeyboardButton("ℹ️ About", callback_data="about", style=enums.ButtonStyle.PRIMARY),
+                InlineKeyboardButton("📖 Help", callback_data="help", style=enums.ButtonStyle.DANGER),
             ],
         ]
 
@@ -460,16 +485,16 @@ async def help_about_callback_handler(client: Client, callback: CallbackQuery):
         parse_mode = enums.ParseMode.MARKDOWN
         buttons = [
             [
-                InlineKeyboardButton("🔍 Search / IMDb", callback_data="cat_search"),
-                InlineKeyboardButton("🎛 Filters", callback_data="cat_filters"),
+                InlineKeyboardButton("🔍 Search / IMDb", callback_data="cat_search", style=enums.ButtonStyle.PRIMARY),
+                InlineKeyboardButton("🎛 Filters", callback_data="cat_filters", style=enums.ButtonStyle.SUCCESS),
             ],
             [
-                InlineKeyboardButton("🔗 Connections", callback_data="cat_connections"),
-                InlineKeyboardButton("🔑 Admin", callback_data="cat_admin"),
+                InlineKeyboardButton("🔑 Admin", callback_data="cat_admin", style=enums.ButtonStyle.DANGER),
+                InlineKeyboardButton("🔗 Connections", callback_data="cat_connections", style=enums.ButtonStyle.PRIMARY),
             ],
             [
-                InlineKeyboardButton("◀️ Back", callback_data="start"),
-                InlineKeyboardButton("❌ Close", callback_data="close_data"),
+                InlineKeyboardButton("◀️ Back", callback_data="start", style=enums.ButtonStyle.PRIMARY),
+                InlineKeyboardButton("❌ Close", callback_data="close_data", style=enums.ButtonStyle.DANGER),
             ],
         ]
     elif data == "about":  # about
@@ -478,8 +503,8 @@ async def help_about_callback_handler(client: Client, callback: CallbackQuery):
         )
         parse_mode = enums.ParseMode.HTML
         buttons = [[
-            InlineKeyboardButton("◀️ Back", callback_data="start"),
-            InlineKeyboardButton("❌ Close", callback_data="close_data"),
+            InlineKeyboardButton("◀️ Back", callback_data="start", style=enums.ButtonStyle.PRIMARY),
+            InlineKeyboardButton("❌ Close", callback_data="close_data", style=enums.ButtonStyle.DANGER),
         ]]
     elif data.startswith("cat_"):
         cat = data.split("_", 1)[1]
@@ -492,7 +517,7 @@ async def help_about_callback_handler(client: Client, callback: CallbackQuery):
             else:
                 text = text.format(RuntimeCache.bot_username)
         parse_mode = enums.ParseMode.MARKDOWN
-        buttons = [[InlineKeyboardButton("◀️ Back", callback_data="help")]]
+        buttons = [[InlineKeyboardButton("◀️ Back", callback_data="help", style=enums.ButtonStyle.PRIMARY)]]
     else:
         return
 

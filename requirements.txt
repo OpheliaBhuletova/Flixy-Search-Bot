@@ -1,6 +1,6 @@
 # Core Telegram framework
-git+https://github.com/pyrogram/pyrogram@master
-tgcrypto
+pyrotgfork==2.2.23
+tgcrypto-pyrofork==1.2.8
 
 # Database (async)
 motor>=3.4.0

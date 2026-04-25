@@ -199,6 +199,7 @@ async def connections_handler(client: Client, message: Message):
                     InlineKeyboardButton(
                         text=f"{chat.title}{status_text}",
                         callback_data=f"groupcb:{gid}:{status_flag}",
+                        style=enums.ButtonStyle.PRIMARY,
                     )
                 ]
             )
