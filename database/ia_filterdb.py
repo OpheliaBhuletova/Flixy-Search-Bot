@@ -69,7 +69,7 @@ async def save_file(media) -> Tuple[bool, int, str]:
             file_name=file_name,
             file_size=media.file_size,
             file_type=media.file_type,
-            mime_type=media.mime_type,
+            mime_type = getattr(media, "mime_type", None),
             caption=media.caption.html if media.caption else None,
             created_at=datetime.now(timezone.utc),
         )

@@ -673,8 +673,8 @@ async def start_handler(client: Client, message: Message):
     if len(message.command) != 2:
         buttons = [
             [
-                InlineKeyboardButton("🔍 Search", switch_inline_query_current_chat=""),
-                InlineKeyboardButton("🤖 Updates", url="https://t.me/+w7aX0q-ex1U1NDc1")
+                InlineKeyboardButton("🔍 Search", switch_inline_query_current_chat="", style=enums.ButtonStyle.PRIMARY),
+                InlineKeyboardButton("🤖 Updates", url="https://t.me/+w7aX0q-ex1U1NDc1", style=enums.ButtonStyle.SUCCESS)
             ],
             [
                 InlineKeyboardButton("❓Help", callback_data="help"),

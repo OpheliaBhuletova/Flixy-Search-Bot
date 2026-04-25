@@ -19,6 +19,10 @@ from database.ia_filterdb import Media
 from database.users_chats_db import get_db_instance
 from plugins import web_server
 
+import pyrogram
+
+logging.basicConfig(level=logging.INFO)
+logging.info(f"--- RUNNING PYROTQFORK VERSION: {pyrogram.__version__} ---")
 
 # ─── Logging setup ────────────────────────────────────────────────────
 os.makedirs("logs", exist_ok=True)
