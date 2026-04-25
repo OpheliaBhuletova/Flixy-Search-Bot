@@ -376,10 +376,8 @@ async def publish_updates_handler(client: Client, message: Message):
             quote_match = re.search(r'\"(.+?)\"', message.text)
             if quote_match:
                 reply_text = quote_match.group(1)
-                logger.info(f"Extracted reply text: {reply_text}")
             else:
                 reply_text = ""
-                logger.info(f"No quotes found in: {message.text}")
         else:
             reply_text = ""
 
@@ -496,7 +494,7 @@ async def publish_updates_handler(client: Client, message: Message):
             
             # Send reply to the linked post
             try:
-                quoted_text = f"<blockquote>{reply_text}</blockquote>" if reply_text else "[Reply sent by admin]"
+                quoted_text = f"<blockquote>{reply_text}</blockquote>"
                 await client.send_message(
                     chat_id=update_channel,
                     text=quoted_text,
@@ -521,7 +519,7 @@ async def publish_updates_handler(client: Client, message: Message):
                 if is_peer_error:
                     logger.warning(f"Peer error sending reply to post {original_msg_id}, using fallback: {exc}")
                     try:
-                        fallback_text = f"<blockquote>{reply_text}</blockquote>" if reply_text else "[Reply sent by admin]"
+                        fallback_text = f"<blockquote>{reply_text}</blockquote>"
                         await botapi_send_message(client.bot_token, update_channel, fallback_text)
                         logger.info("Sent reply to %s using Bot API fallback", update_channel)
                         await message.reply(
