@@ -517,6 +517,7 @@ async def publish_updates_handler(client: Client, message: Message):
                     or isinstance(exc, PeerIdInvalid)
                 )
                 if is_peer_error:
+                    logger.warning(f"Peer error sending reply to post {original_msg_id}, using fallback: {exc}")
                     try:
                         fallback_text = f"<blockquote>{reply_text}</blockquote>" if reply_text else "[Reply sent by admin]"
                         await botapi_send_message(client.bot_token, update_channel, fallback_text)
