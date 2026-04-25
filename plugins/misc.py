@@ -389,8 +389,8 @@ async def help_about_callback_handler(client: Client, callback: CallbackQuery):
     if data == "start":
         buttons = [
             [
-                InlineKeyboardButton("🔍 Search", switch_inline_query_current_chat=""),
-                InlineKeyboardButton("🤖 Updates", url="https://t.me/+w7aX0q-ex1U1NDc1"),
+                InlineKeyboardButton("🔍 Search", switch_inline_query_current_chat="", style=enums.ButtonStyle.PRIMARY),
+                InlineKeyboardButton("🤖 Updates", url="https://t.me/+w7aX0q-ex1U1NDc1", style=enums.ButtonStyle.SUCCESS),
             ],
             [
                 InlineKeyboardButton("❓Help", callback_data="help"),
@@ -461,10 +461,10 @@ async def help_about_callback_handler(client: Client, callback: CallbackQuery):
         buttons = [
             [
                 # Primary (Blue) for the main action
-                InlineKeyboardButton("🔍 Search", switch_inline_query_current_chat="", style="primary"),
+                InlineKeyboardButton("🔍 Search", switch_inline_query_current_chat="", style=enums.ButtonStyle.PRIMARY),
                 
                 # Success (Green) for a positive external link
-                InlineKeyboardButton("🤖 Updates", url="https://t.me/+w7aX0q-ex1U1NDc1", style="success"),
+                InlineKeyboardButton("🤖 Updates", url="https://t.me/+w7aX0q-ex1U1NDc1", style=enums.ButtonStyle.SUCCESS),
             ],
             [
                 # Standard look for utility buttons (Help/About)
