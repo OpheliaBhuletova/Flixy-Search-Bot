@@ -405,16 +405,11 @@ async def publish_updates_handler(client: Client, message: Message):
                 if include_buttons:
                     buttons = [
                         [
-                            InlineKeyboardButton("👍", callback_data="emoji_thumbs_up"),
-                            InlineKeyboardButton("👎", callback_data="emoji_thumbs_down"),
-                            InlineKeyboardButton("❤️", callback_data="emoji_love")
+                            InlineKeyboardButton("🎬 Movies", url="https://t.me/+5FUtXWwDtTxhNTM1"),
+                            InlineKeyboardButton("📺 Series", url="https://t.me/+8Ue11G48SfEzNjc9")
                         ],
                         [
-                            InlineKeyboardButton("Movies", url="https://t.me/+5FUtXWwDtTxhNTM1"),
-                            InlineKeyboardButton("TV Series", url="https://t.me/+8Ue11G48SfEzNjc9")
-                        ],
-                        [
-                            InlineKeyboardButton("Flixy Search Bot", url="https://t.me/CSrchBot")
+                            InlineKeyboardButton("🔍 Search", url="https://t.me/CSrchBot")
                         ]
                     ]
                     
