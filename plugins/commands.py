@@ -376,8 +376,10 @@ async def publish_updates_handler(client: Client, message: Message):
             quote_match = re.search(r'\"(.+?)\"', message.text)
             if quote_match:
                 reply_text = quote_match.group(1)
+                logger.info(f"Extracted reply text: {reply_text}")
             else:
                 reply_text = ""
+                logger.info(f"No quotes found in: {message.text}")
         else:
             reply_text = ""
 
