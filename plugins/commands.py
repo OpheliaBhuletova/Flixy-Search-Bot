@@ -405,11 +405,11 @@ async def publish_updates_handler(client: Client, message: Message):
                 if include_buttons:
                     buttons = [
                         [
-                            InlineKeyboardButton("🎬 Movies", url="https://t.me/+5FUtXWwDtTxhNTM1"),
-                            InlineKeyboardButton("📺 Series", url="https://t.me/+8Ue11G48SfEzNjc9")
+                            InlineKeyboardButton("🎬 Movies", url="https://t.me/+5FUtXWwDtTxhNTM1", style=enums.ButtonStyle.PRIMARY),
+                            InlineKeyboardButton("📺 Series", url="https://t.me/+8Ue11G48SfEzNjc9", style=enums.ButtonStyle.PRIMARY)
                         ],
                         [
-                            InlineKeyboardButton("🔍 Search", url="https://t.me/CSrchBot")
+                            InlineKeyboardButton("🔍 Search", url="https://t.me/CSrchBot", style=enums.ButtonStyle.PRIMARY)
                         ]
                     ]
                     
@@ -590,8 +590,8 @@ async def start_handler(client: Client, message: Message):
     # ── GROUP START ──
     if message.chat.type in {enums.ChatType.GROUP, enums.ChatType.SUPERGROUP}:
         buttons = [
-            [InlineKeyboardButton("🤖 Updates", url="https://t.me/+w7aX0q-ex1U1NDc1")],
-            [InlineKeyboardButton("❓Help", url=f"https://t.me/{RuntimeCache.bot_username}?start=help")]
+            [InlineKeyboardButton("🤖 Updates", url="https://t.me/+w7aX0q-ex1U1NDc1", style=enums.ButtonStyle.SUCCESS)],
+            [InlineKeyboardButton("❓Help", url=f"https://t.me/{RuntimeCache.bot_username}?start=help", style=enums.ButtonStyle.PRIMARY)]
         ]
 
         if message.from_user:
@@ -677,8 +677,8 @@ async def start_handler(client: Client, message: Message):
                 InlineKeyboardButton("🤖 Updates", url="https://t.me/+w7aX0q-ex1U1NDc1", style=enums.ButtonStyle.SUCCESS)
             ],
             [
-                InlineKeyboardButton("❓Help", callback_data="help"),
-                InlineKeyboardButton("ℹ️ About", callback_data="about")
+                InlineKeyboardButton("❓Help", callback_data="help", style=enums.ButtonStyle.PRIMARY),
+                InlineKeyboardButton("ℹ️ About", callback_data="about", style=enums.ButtonStyle.PRIMARY)
             ]
         ]
 

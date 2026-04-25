@@ -69,10 +69,7 @@ async def index_callback_handler(client: Client, query: CallbackQuery):
     await query.message.edit(
         "Starting indexing...",
         reply_markup=InlineKeyboardMarkup(
-            [[InlineKeyboardButton("Cancel", callback_data="index_cancel")]]
-        ),
-    )
-
+                [[InlineKeyboardButton("Cancel", callback_data="index_cancel", style=enums.ButtonStyle.DANGER)]]
     try:
         chat = int(chat)
     except ValueError:
@@ -141,9 +138,10 @@ async def send_for_index(client: Client, message: Message):
                 InlineKeyboardButton(
                     "Yes",
                     callback_data=f"index#accept#{chat_id}#{last_msg_id}#{message.from_user.id}",
+                    style=enums.ButtonStyle.PRIMARY,
                 )
             ],
-            [InlineKeyboardButton("Close", callback_data="close_data")],
+            [InlineKeyboardButton("Close", callback_data="close_data", style=enums.ButtonStyle.DANGER)],
         ]
         return await message.reply(
             f"Do you want to index this chat?\n\n"
@@ -168,12 +166,14 @@ async def send_for_index(client: Client, message: Message):
             InlineKeyboardButton(
                 "Accept Index",
                 callback_data=f"index#accept#{chat_id}#{last_msg_id}#{message.from_user.id}",
+                style=enums.ButtonStyle.SUCCESS,
             )
         ],
         [
             InlineKeyboardButton(
                 "Reject Index",
                 callback_data=f"index#reject#{chat_id}#{message.id}#{message.from_user.id}",
+                style=enums.ButtonStyle.DANGER,
             )
         ],
     ]
@@ -267,7 +267,7 @@ async def index_files_to_db(
                         f"🕒 <b>ETA:</b> <code>{format_eta(eta_seconds)}</code>",
                         parse_mode=enums.ParseMode.HTML,
                         reply_markup=InlineKeyboardMarkup(
-                            [[InlineKeyboardButton("Cancel", callback_data="index_cancel")]]
+                            [[InlineKeyboardButton("Cancel", callback_data="index_cancel", style=enums.ButtonStyle.DANGER)]]
                         ),
                     )
 

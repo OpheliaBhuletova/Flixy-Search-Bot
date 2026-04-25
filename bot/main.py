@@ -259,7 +259,7 @@ class Bot(Client):
                                     "No complicated steps. Just type and get what you want.\n\n"
                                 )
                                 buttons = InlineKeyboardMarkup(
-                                    [[InlineKeyboardButton("Try Flixy", url=f"https://t.me/{RuntimeCache.bot_username}" )]]
+                                    [[InlineKeyboardButton("Try Flixy", url=f"https://t.me/{RuntimeCache.bot_username}", style=enums.ButtonStyle.PRIMARY)]]
                                 )
                                 sent = await app.send_message(
                                     ch,

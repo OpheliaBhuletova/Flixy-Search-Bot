@@ -47,7 +47,8 @@ async def grp_bd(client: Client, message: Message):
     buttons = [[
         InlineKeyboardButton(
             text="Support",
-            url=f"https://t.me/{settings.SUPPORT_CHAT}"
+            url=f"https://t.me/{settings.SUPPORT_CHAT}",
+            style=enums.ButtonStyle.SUCCESS
         )
     ]]
     reply_markup = InlineKeyboardMarkup(buttons)

@@ -72,6 +72,7 @@ async def new_movie_broadcast(client: Client, title: str):
         InlineKeyboardButton(
             "🔎 Search Instantly",
             switch_inline_query_current_chat=title,
+            style=enums.ButtonStyle.PRIMARY,
         )
     ]]
 

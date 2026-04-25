@@ -53,7 +53,7 @@ async def inline_query_handler(client: Client, query: InlineQuery):
             InlineKeyboardButton(
                 text=" Search again", 
                 switch_inline_query_current_chat=keyword,
-                style="primary"  # This makes the button Blue
+                style=enums.ButtonStyle.PRIMARY
             )
         ]]
     )

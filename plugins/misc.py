@@ -115,7 +115,7 @@ async def user_info_handler(client: Client, message):
         except UserNotParticipant:
             pass
 
-    buttons = [[InlineKeyboardButton("🔐 Close", callback_data="close_data")]]
+    buttons = [[InlineKeyboardButton("🔐 Close", callback_data="close_data", style=enums.ButtonStyle.DANGER)]]
     markup = InlineKeyboardMarkup(buttons)
 
     if user.photo:
@@ -223,6 +223,7 @@ async def imdb_search_handler(client: Client, message: Message):
             InlineKeyboardButton(
                 text=f"{item['title']} - {item['year']} ({'TV' if item['media_type'] == 'tv' else 'Movie'})",
                 callback_data=f"imdb#{item['media_type']}#{item['id']}",
+                style=enums.ButtonStyle.PRIMARY,
             )
         ]
         for item in results
@@ -326,7 +327,7 @@ async def imdb_callback_handler(client: Client, callback: CallbackQuery):
         return await callback.answer("No data found.", show_alert=True)
 
     caption = settings.METADATA_TEMPLATE.format(**imdb, query=imdb["title"])
-    buttons = [[InlineKeyboardButton(imdb["title"], url=imdb["url"])]]
+    buttons = [[InlineKeyboardButton(imdb["title"], url=imdb["url"], style=enums.ButtonStyle.SUCCESS)]]
     markup = InlineKeyboardMarkup(buttons)
 
     # Check if poster exists and is valid
@@ -393,8 +394,8 @@ async def help_about_callback_handler(client: Client, callback: CallbackQuery):
                 InlineKeyboardButton("🤖 Updates", url="https://t.me/+w7aX0q-ex1U1NDc1", style=enums.ButtonStyle.SUCCESS),
             ],
             [
-                InlineKeyboardButton("❓Help", callback_data="help"),
-                InlineKeyboardButton("ℹ️ About", callback_data="about"),
+                InlineKeyboardButton("❓Help", callback_data="help", style=enums.ButtonStyle.PRIMARY),
+                InlineKeyboardButton("ℹ️ About", callback_data="about", style=enums.ButtonStyle.PRIMARY),
             ],
         ]
 
@@ -462,14 +463,12 @@ async def help_about_callback_handler(client: Client, callback: CallbackQuery):
             [
                 # Primary (Blue) for the main action
                 InlineKeyboardButton("🔍 Search", switch_inline_query_current_chat="", style=enums.ButtonStyle.PRIMARY),
-                
-                # Success (Green) for a positive external link
                 InlineKeyboardButton("🤖 Updates", url="https://t.me/+w7aX0q-ex1U1NDc1", style=enums.ButtonStyle.SUCCESS),
             ],
             [
                 # Standard look for utility buttons (Help/About)
-                InlineKeyboardButton("❓ Help", callback_data="help"),
-                InlineKeyboardButton("ℹ️ About", callback_data="about"),
+                InlineKeyboardButton("❓ Help", callback_data="help", style=enums.ButtonStyle.PRIMARY),
+                InlineKeyboardButton("ℹ️ About", callback_data="about", style=enums.ButtonStyle.PRIMARY),
             ],
         ]
     elif data == "about":  # about
@@ -478,8 +477,8 @@ async def help_about_callback_handler(client: Client, callback: CallbackQuery):
         )
         parse_mode = enums.ParseMode.HTML
         buttons = [[
-            InlineKeyboardButton("◀️ Back", callback_data="start"),
-            InlineKeyboardButton("❌ Close", callback_data="close_data"),
+            InlineKeyboardButton("◀️ Back", callback_data="start", style=enums.ButtonStyle.PRIMARY),
+            InlineKeyboardButton("❌ Close", callback_data="close_data", style=enums.ButtonStyle.DANGER),
         ]]
     elif data.startswith("cat_"):
         cat = data.split("_", 1)[1]
@@ -492,7 +491,7 @@ async def help_about_callback_handler(client: Client, callback: CallbackQuery):
             else:
                 text = text.format(RuntimeCache.bot_username)
         parse_mode = enums.ParseMode.MARKDOWN
-        buttons = [[InlineKeyboardButton("◀️ Back", callback_data="help")]]
+        buttons = [[InlineKeyboardButton("◀️ Back", callback_data="help", style=enums.ButtonStyle.PRIMARY)]]
     else:
         return
 
