@@ -217,14 +217,19 @@ async def next_page(client: Client, query: CallbackQuery):
         if settings_data["button"]:
             buttons.append([
                 InlineKeyboardButton(
-                    f"[{get_size(file.file_size)}] {file.file_name}",
+                    f"🎬 {file.file_name}",
+                    callback_data=f"{pre}#{file.file_id}",
+                    style=enums.ButtonStyle.SUCCESS,
+                ),
+                InlineKeyboardButton(
+                    f"💾 {get_size(file.file_size)}",
                     callback_data=f"{pre}#{file.file_id}",
                     style=enums.ButtonStyle.PRIMARY,
-                )
+                ),
             ])
         else:
             buttons.append([
-                InlineKeyboardButton(file.file_name, callback_data=f"{pre}#{file.file_id}", style=enums.ButtonStyle.PRIMARY),
+                InlineKeyboardButton(file.file_name, callback_data=f"{pre}#{file.file_id}", style=enums.ButtonStyle.SUCCESS),
                 InlineKeyboardButton(get_size(file.file_size), callback_data=f"{pre}#{file.file_id}", style=enums.ButtonStyle.PRIMARY),
             ])
 
@@ -237,7 +242,7 @@ async def next_page(client: Client, query: CallbackQuery):
             InlineKeyboardButton("⏪ BACK", callback_data=f"next_{req}_{key}_{offset-10}", style=enums.ButtonStyle.PRIMARY)
         )
     nav.append(
-        InlineKeyboardButton(f"📃 {page}/{total_pages}", callback_data="pages", style=enums.ButtonStyle.PRIMARY)
+        InlineKeyboardButton(f"📃 {page}/{total_pages}", callback_data="pages", style=enums.ButtonStyle.SECONDARY)
     )
     if next_offset:
         nav.append(
@@ -358,12 +363,13 @@ async def auto_filter(client: Client, message, spoll=None):
     pre = "filep" if settings_data["file_secure"] else "file"
     buttons = []
 
-    for file in files:
+    for i, file in enumerate(files):
+        style = enums.ButtonStyle.PRIMARY if i % 2 == 0 else enums.ButtonStyle.DEFAULT
         buttons.append([
             InlineKeyboardButton(
-                f"[{get_size(file.file_size)}] {file.file_name}",
+                f"{file.file_name}",
                 callback_data=f"{pre}#{file.file_id}",
-                style=enums.ButtonStyle.PRIMARY,
+                style=style,
             )
         ])
 

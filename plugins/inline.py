@@ -1,6 +1,6 @@
 import logging
 
-from pyrogram import Client
+from pyrogram import Client, enums
 from pyrogram.types import (
     InlineKeyboardButton,
     InlineKeyboardMarkup,
@@ -51,9 +51,9 @@ async def inline_query_handler(client: Client, query: InlineQuery):
     reply_markup = InlineKeyboardMarkup(
         [[
             InlineKeyboardButton(
-                text=" Search again", 
+                text=" Search Again", 
                 switch_inline_query_current_chat=keyword,
-                style=enums.ButtonStyle.PRIMARY
+                style=enums.ButtonStyle.SUCCESS
             )
         ]]
     )

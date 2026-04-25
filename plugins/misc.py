@@ -250,26 +250,48 @@ async def imdb_info_handler(client: Client, message: Message):
         )
 
     query = message.text.split(None, 1)[1]
-    status_msg = await client.send_message_draft(message.chat.id, "Fetching metadata")
 
-    animation = asyncio.create_task(animate_search_message(status_msg))
+    # Draft setup
+    draft_id = 1
+
+    # Initial draft message
+    await client.send_message_draft(
+        chat_id=message.chat.id,
+        draft_id=draft_id,
+        text="🔍 Fetching metadata..."
+    )
+
+    # Optional streaming effect
+    await asyncio.sleep(0.4)
+    await client.send_message_draft(
+        chat_id=message.chat.id,
+        draft_id=draft_id,
+        text="🔍 Fetching metadata.."
+    )
+
+    await asyncio.sleep(0.4)
+    await client.send_message_draft(
+        chat_id=message.chat.id,
+        draft_id=draft_id,
+        text="🔍 Fetching metadata..."
+    )
+
     imdb = await get_imdb_info(query)
 
-    animation.cancel()
-    try:
-        await animation
-    except asyncio.CancelledError:
-        pass
+    # Clear draft (send empty text → effectively removes it)
+    await client.send_message_draft(
+        chat_id=message.chat.id,
+        draft_id=draft_id,
+        text="Done ✅"
+    )
 
     if not imdb:
-        await status_msg.delete()
         return await message.reply(
             f"No results found for <b>{html.escape(query)}</b>.",
             parse_mode=enums.ParseMode.HTML,
         )
 
-    await status_msg.delete()
-    await asyncio.sleep(0.4)
+    await asyncio.sleep(0.3)
 
     msg = (
         f"<b>{imdb['type_label']}:</b> <a href='{imdb['url']}'>{imdb['title']}</a> [{imdb['year']}]\n"
@@ -392,12 +414,12 @@ async def help_about_callback_handler(client: Client, callback: CallbackQuery):
     if data == "start":
         buttons = [
             [
-                InlineKeyboardButton("🔍 Search", switch_inline_query_current_chat="", style=enums.ButtonStyle.PRIMARY),
-                InlineKeyboardButton("🤖 Updates", url="https://t.me/+w7aX0q-ex1U1NDc1", style=enums.ButtonStyle.SUCCESS),
+                InlineKeyboardButton("🔍 Search", switch_inline_query_current_chat="", style=enums.ButtonStyle.SUCCESS),
+                InlineKeyboardButton("🤖 Updates", url="https://t.me/+w7aX0q-ex1U1NDc1", style=enums.ButtonStyle.PRIMARY),
             ],
             [
-                InlineKeyboardButton("❓Help", callback_data="help", style=enums.ButtonStyle.PRIMARY),
                 InlineKeyboardButton("ℹ️ About", callback_data="about", style=enums.ButtonStyle.PRIMARY),
+                InlineKeyboardButton("📖 Help", callback_data="help", style=enums.ButtonStyle.DANGER),
             ],
         ]
 
@@ -461,10 +483,20 @@ async def help_about_callback_handler(client: Client, callback: CallbackQuery):
     if data == "help":
         text = Texts.HELP_TXT
         parse_mode = enums.ParseMode.MARKDOWN
-        buttons = [[
-            InlineKeyboardButton("◀️ Back", callback_data="start", style=enums.ButtonStyle.PRIMARY),
-            InlineKeyboardButton("❌ Close", callback_data="close_data", style=enums.ButtonStyle.DANGER),
-        ]]
+        buttons = [
+            [
+                InlineKeyboardButton("🔍 Search / IMDb", callback_data="cat_search", style=enums.ButtonStyle.PRIMARY),
+                InlineKeyboardButton("🎛 Filters", callback_data="cat_filters", style=enums.ButtonStyle.SUCCESS),
+            ],
+            [
+                InlineKeyboardButton("🔑 Admin", callback_data="cat_admin", style=enums.ButtonStyle.DANGER),
+                InlineKeyboardButton("🔗 Connections", callback_data="cat_connections", style=enums.ButtonStyle.PRIMARY),
+            ],
+            [
+                InlineKeyboardButton("◀️ Back", callback_data="start", style=enums.ButtonStyle.PRIMARY),
+                InlineKeyboardButton("❌ Close", callback_data="close_data", style=enums.ButtonStyle.DANGER),
+            ],
+        ]
     elif data == "about":  # about
         text = Texts.ABOUT_TXT.format(
             client.me.first_name if client.me else "Bot"

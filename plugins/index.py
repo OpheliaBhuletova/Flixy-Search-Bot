@@ -69,7 +69,7 @@ async def index_callback_handler(client: Client, query: CallbackQuery):
     await query.message.edit(
         "Starting indexing...",
         reply_markup=InlineKeyboardMarkup(
-                [[InlineKeyboardButton("Cancel", callback_data="index_cancel", style=enums.ButtonStyle.DANGER)]]
+                [[InlineKeyboardButton("Cancel", callback_data="index_cancel", style=enums.ButtonStyle.DANGER)]]))
     try:
         chat = int(chat)
     except ValueError:

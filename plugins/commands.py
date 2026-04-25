@@ -673,13 +673,13 @@ async def start_handler(client: Client, message: Message):
     if len(message.command) != 2:
         buttons = [
             [
-                InlineKeyboardButton("🔍 Search", switch_inline_query_current_chat="", style=enums.ButtonStyle.PRIMARY),
-                InlineKeyboardButton("🤖 Updates", url="https://t.me/+w7aX0q-ex1U1NDc1", style=enums.ButtonStyle.SUCCESS)
+                InlineKeyboardButton("🔍 Search", switch_inline_query_current_chat="", style=enums.ButtonStyle.SUCCESS),
+                InlineKeyboardButton("🤖 Updates", url="https://t.me/+w7aX0q-ex1U1NDc1", style=enums.ButtonStyle.PRIMARY),
             ],
             [
-                InlineKeyboardButton("❓Help", callback_data="help", style=enums.ButtonStyle.PRIMARY),
-                InlineKeyboardButton("ℹ️ About", callback_data="about", style=enums.ButtonStyle.PRIMARY)
-            ]
+                InlineKeyboardButton("ℹ️ About", callback_data="about", style=enums.ButtonStyle.PRIMARY),
+                InlineKeyboardButton("📖 Help", callback_data="help", style=enums.ButtonStyle.DANGER),
+            ],
         ]
 
         startup_images = []
