@@ -460,16 +460,16 @@ async def help_about_callback_handler(client: Client, callback: CallbackQuery):
         parse_mode = enums.ParseMode.MARKDOWN
         buttons = [
             [
-                InlineKeyboardButton("🔍 Search / IMDb", callback_data="cat_search"),
-                InlineKeyboardButton("🎛 Filters", callback_data="cat_filters"),
+                # Primary (Blue) for the main action
+                InlineKeyboardButton("🔍 Search", switch_inline_query_current_chat="", style="primary"),
+                
+                # Success (Green) for a positive external link
+                InlineKeyboardButton("🤖 Updates", url="https://t.me/+w7aX0q-ex1U1NDc1", style="success"),
             ],
             [
-                InlineKeyboardButton("🔗 Connections", callback_data="cat_connections"),
-                InlineKeyboardButton("🔑 Admin", callback_data="cat_admin"),
-            ],
-            [
-                InlineKeyboardButton("◀️ Back", callback_data="start"),
-                InlineKeyboardButton("❌ Close", callback_data="close_data"),
+                # Standard look for utility buttons (Help/About)
+                InlineKeyboardButton("❓ Help", callback_data="help"),
+                InlineKeyboardButton("ℹ️ About", callback_data="about"),
             ],
         ]
     elif data == "about":  # about
