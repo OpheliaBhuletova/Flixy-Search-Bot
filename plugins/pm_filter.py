@@ -120,15 +120,21 @@ async def pm_image_file_id_handler(client: Client, message):
             except Exception:
                 logger.exception("Failed to send image file ID to LOG_CHANNEL")
         
-        # Store file ID if no caption
-        if not message.caption or message.caption.strip() == "":
+        # Store file ID only if image has NO caption
+        has_caption = (
+            hasattr(message, 'caption') and 
+            message.caption is not None and 
+            message.caption.strip() != ""
+        )
+        
+        if not has_caption:
             # Prepare media object for saving
             if file_info.message_type == "photo":
                 file_info.file_name = "Photo"
             else:
                 file_info.file_name = file_info.file_name or "Image"
             file_info.file_type = file_info.message_type
-            file_info.caption = message.caption
+            file_info.caption = None
             
             saved, reason, title = await save_file(file_info)
             if saved:
