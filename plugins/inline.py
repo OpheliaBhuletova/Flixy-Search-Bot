@@ -49,7 +49,13 @@ async def inline_query_handler(client: Client, query: InlineQuery):
         file_type = None
 
     reply_markup = InlineKeyboardMarkup(
-        [[InlineKeyboardButton(" Search again", switch_inline_query_current_chat=keyword)]]
+        [[
+            InlineKeyboardButton(
+                text=" Search again", 
+                switch_inline_query_current_chat=keyword,
+                style="primary"  # This makes the button Blue
+            )
+        ]]
     )
 
     files, next_offset, total = await get_search_results(
