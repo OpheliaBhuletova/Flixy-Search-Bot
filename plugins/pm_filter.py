@@ -242,7 +242,7 @@ async def next_page(client: Client, query: CallbackQuery):
             InlineKeyboardButton("⏪ BACK", callback_data=f"next_{req}_{key}_{offset-10}", style=enums.ButtonStyle.PRIMARY)
         )
     nav.append(
-        InlineKeyboardButton(f"📃 {page}/{total_pages}", callback_data="pages", style=enums.ButtonStyle.SECONDARY)
+        InlineKeyboardButton(f"📃 {page}/{total_pages}", callback_data="pages", style=enums.ButtonStyle.DEFAULT)
     )
     if next_offset:
         nav.append(
