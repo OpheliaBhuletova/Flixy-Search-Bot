@@ -342,12 +342,38 @@ async def auto_filter(client: Client, message, spoll=None):
         message.chat.id if not spoll else message.message.chat.id
     )
 
+    # Draft setup for animated fetching message
+    draft_id = 1
+    
     if not spoll:
         if message.text.startswith("/") or len(message.text) > 100:
             return
         search = message.text.strip()
+        
+        # Show animated "🔍 Searching..." message
+        dots = ["", ".", "..", "..."]
+        for i in range(4):
+            try:
+                await client.send_message_draft(
+                    chat_id=message.chat.id,
+                    draft_id=draft_id,
+                    text=f"🔍 Searching{dots[i % 4]}"
+                )
+                await asyncio.sleep(0.4)
+            except Exception:
+                pass
+        
         files, offset, total = await get_search_results(search.lower(), filter=True)
         if not files:
+            # Clear draft on spell check or no results
+            try:
+                await client.send_message_draft(
+                    chat_id=message.chat.id,
+                    draft_id=draft_id,
+                    text=""
+                )
+            except Exception:
+                pass
             if settings_data["spell_check"]:
                 return await spell_check(message)
             return
@@ -386,8 +412,18 @@ async def auto_filter(client: Client, message, spoll=None):
     caption = (
         settings_data["template"].format(**imdb, query=search)
         if imdb
-        else f"Results for <b>{search}</b>\n\n<i>(Note: Files will be automatically deleted after 3 hours)</i>"
+        else f"🎬 <b>Results for:</b> {search}\n\n<i>(Note: Files will be automatically deleted after 3 hours)</i>"
     )
+
+    # Clear draft after results are ready
+    try:
+        await client.send_message_draft(
+            chat_id=message.chat.id,
+            draft_id=draft_id,
+            text=""
+        )
+    except Exception:
+        pass
 
     if imdb and imdb.get("poster"):
         try:
