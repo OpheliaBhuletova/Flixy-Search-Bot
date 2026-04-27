@@ -228,7 +228,7 @@ class Bot(Client):
                 )
                 # delete log message after 1 hour if we got a message object
                 if msg:
-                    schedule_delete_message(self, msg.chat.id, msg.id, delay_seconds=3600)
+                    schedule_delete_message(self, msg.chat.id, msg.id, delay_seconds=60)
             except Exception:
                 logger.exception("Failed to send startup log to LOG_CHANNEL")
 

@@ -86,28 +86,14 @@ async def index_callback_handler(client: Client, query: CallbackQuery):
 # ─── SEND INDEX REQUEST ───────────────────────────────────────────────
 
 @Client.on_message(
-    (
-        filters.forwarded
-        | (filters.regex(LINK_REGEX.pattern) & filters.text)
-    )
-    & filters.private
+    filters.forwarded & filters.private
 )
 async def send_for_index(client: Client, message: Message):
-    if message.text:
-        match = LINK_REGEX.match(message.text)
-        if not match:
-            return await message.reply("Invalid link.")
-
-        chat_id = match.group(4)
-        last_msg_id = int(match.group(5))
-        if chat_id.isnumeric():
-            chat_id = int("-100" + chat_id)
-
-    elif message.forward_from_chat and message.forward_from_chat.type == enums.ChatType.CHANNEL:
-        chat_id = message.forward_from_chat.username or message.forward_from_chat.id
-        last_msg_id = message.forward_from_message_id
-    else:
+    if not message.forward_from_chat or message.forward_from_chat.type != enums.ChatType.CHANNEL:
         return
+    
+    chat_id = message.forward_from_chat.username or message.forward_from_chat.id
+    last_msg_id = message.forward_from_message_id
 
     try:
         await client.get_chat(chat_id)

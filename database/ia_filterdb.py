@@ -117,20 +117,26 @@ async def get_search_results(
         mongo_filter["file_type"] = file_type
 
     total_results = await Media.count_documents(mongo_filter)
+    
+    # Limit max fetch to avoid loading entire database into memory for broad queries
+    MAX_MEMORY_RESULTS = 100
+    if total_results > MAX_MEMORY_RESULTS:
+        total_results = MAX_MEMORY_RESULTS
+
     next_offset = offset + max_results
     if next_offset >= total_results:
         next_offset = ""
 
     sort_field = "created_at" if not query else "_id"
 
+    # Fetch up to MAX_MEMORY_RESULTS instead of just max_results for the current page
     cursor = (
         Media.find(mongo_filter)
         .sort(sort_field, -1)
-        .skip(offset)
-        .limit(max_results)
+        .limit(MAX_MEMORY_RESULTS)
     )
 
-    files = await cursor.to_list(length=max_results)
+    all_files = await cursor.to_list(length=MAX_MEMORY_RESULTS)
 
     if query:
         query_lower = query.lower()
@@ -140,7 +146,7 @@ async def get_search_results(
         contains_matches = []
         other_matches = []
 
-        for file in files:
+        for file in all_files:
             name = (file.file_name or "").strip().lower()
 
             if name == query_lower:
@@ -152,7 +158,26 @@ async def get_search_results(
             else:
                 other_matches.append(file)
 
-        files = exact_matches + startswith_matches + contains_matches + other_matches
+        def get_lang_rank(name: str) -> int:
+            name = name.lower()
+            if "malayalam" in name or "mal" in name: return 1
+            if "tamil" in name or "tam" in name: return 2
+            if "telugu" in name or "tel" in name: return 3
+            if "hindi" in name or "hin" in name: return 4
+            if "english" in name or "eng" in name: return 5
+            return 6
+
+        sort_key = lambda x: (get_lang_rank(x.file_name or ""), -x.file_size)
+        
+        exact_matches.sort(key=sort_key)
+        startswith_matches.sort(key=sort_key)
+        contains_matches.sort(key=sort_key)
+        other_matches.sort(key=sort_key)
+
+        all_files = exact_matches + startswith_matches + contains_matches + other_matches
+
+    # Apply pagination in Python after global sorting
+    files = all_files[offset : offset + max_results]
 
     return files, next_offset, total_results
 

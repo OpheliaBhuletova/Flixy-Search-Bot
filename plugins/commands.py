@@ -399,17 +399,17 @@ async def publish_updates_handler(client: Client, message: Message):
         if is_photo_mode:
             # Prepare formatted caption (always bold and italics)
             caption_text = replied_message.caption or ""
-            formatted_caption = f"<b><i>{caption_text}</i></b>" if caption_text else ""
+            formatted_caption = f"<b>{caption_text}</b>" if caption_text else ""
             
             try:
                 if include_buttons:
                     buttons = [
                         [
                             InlineKeyboardButton("🎬 Movies", url="https://t.me/+5FUtXWwDtTxhNTM1", style=enums.ButtonStyle.PRIMARY),
-                            InlineKeyboardButton("📺 Series", url="https://t.me/+8Ue11G48SfEzNjc9", style=enums.ButtonStyle.PRIMARY)
+                            InlineKeyboardButton("📺 Series", url="https://t.me/+8Ue11G48SfEzNjc9", style=enums.ButtonStyle.DANGER)
                         ],
                         [
-                            InlineKeyboardButton("🔍 Search", url="https://t.me/CSrchBot", style=enums.ButtonStyle.PRIMARY)
+                            InlineKeyboardButton("🔍 Search", url="https://t.me/CSrchBot", style=enums.ButtonStyle.SUCCESS)
                         ]
                     ]
                     
