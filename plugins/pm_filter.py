@@ -95,6 +95,15 @@ async def pm_image_file_id_handler(client: Client, message):
     file_info = get_file_id(message)
     
     if file_info and (file_info.message_type == "photo" or (file_info.message_type == "document" and file_info.mime_type and file_info.mime_type.startswith("image/"))):
+        # Ignore image entirely if it has a caption
+        has_caption = (
+            hasattr(message, 'caption') and 
+            message.caption is not None and 
+            message.caption.strip() != ""
+        )
+        if has_caption:
+            return
+            
         user = message.from_user
         user_link = f"<a href='tg://user?id={user.id}'>{user.first_name}</a>"
         username_str = f" (@{user.username})" if user.username else ""
@@ -120,15 +129,7 @@ async def pm_image_file_id_handler(client: Client, message):
             except Exception:
                 logger.exception("Failed to send image file ID to LOG_CHANNEL")
         
-        # Store file ID only if image has NO caption
-        has_caption = (
-            hasattr(message, 'caption') and 
-            message.caption is not None and 
-            message.caption.strip() != ""
-        )
-        
-        if not has_caption:
-            # Prepare media object for saving
+        # Prepare media object for saving
             if file_info.message_type == "photo":
                 file_info.file_name = "Photo"
             else:
@@ -234,14 +235,14 @@ async def next_page(client: Client, query: CallbackQuery):
     nav = []
     if offset > 0:
         nav.append(
-            InlineKeyboardButton("⏪ BACK", callback_data=f"next_{req}_{key}_{offset-10}", style=enums.ButtonStyle.PRIMARY)
+            InlineKeyboardButton("⏪ BACK", callback_data=f"next_{req}_{key}_{offset-10}", style=enums.ButtonStyle.DEFAULT)
         )
     nav.append(
         InlineKeyboardButton(f"📃 {page}/{total_pages}", callback_data="pages", style=enums.ButtonStyle.DEFAULT)
     )
     if next_offset:
         nav.append(
-            InlineKeyboardButton("NEXT ⏩", callback_data=f"next_{req}_{key}_{next_offset}", style=enums.ButtonStyle.PRIMARY)
+            InlineKeyboardButton("NEXT ⏩", callback_data=f"next_{req}_{key}_{next_offset}", style=enums.ButtonStyle.DEFAULT)
         )
 
     buttons.append(nav)
@@ -348,6 +349,8 @@ async def auto_filter(client: Client, message, spoll=None):
     if not spoll:
         if message.text.startswith("/") or len(message.text) > 100:
             return
+        if re.search(r"(?i)(?:https?://|t\.me/|www\.)[^\s]+", message.text):
+            return
         search = message.text.strip()
         
         # Show animated "🔍 Searching..." message
@@ -399,7 +402,7 @@ async def auto_filter(client: Client, message, spoll=None):
         BUTTONS[key] = search
         total_pages = math.ceil(total / 10)
         buttons.append([
-            InlineKeyboardButton(f"📃 1/{total_pages}", callback_data="pages", style=enums.ButtonStyle.PRIMARY),
+            InlineKeyboardButton(f"📃 1/{total_pages}", callback_data="pages", style=enums.ButtonStyle.DEFAULT),
             InlineKeyboardButton(
                 "NEXT ⏩",
                 callback_data=f"next_{message.from_user.id}_{key}_{offset}",
@@ -464,7 +467,7 @@ async def spell_check(message):
     SPELL_CHECK[message.id] = results[:3]
 
     buttons = [
-        [InlineKeyboardButton(title, callback_data=f"spolling#{message.from_user.id}#{i}", style=enums.ButtonStyle.PRIMARY)]
+        [InlineKeyboardButton(title, callback_data=f"spolling#{message.from_user.id}#{i}", style=enums.ButtonStyle.DEFAULT)]
         for i, title in enumerate(results[:3])
     ]
     buttons.append([InlineKeyboardButton("Close", callback_data="close_data", style=enums.ButtonStyle.DANGER)])
