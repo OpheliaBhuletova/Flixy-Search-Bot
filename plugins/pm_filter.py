@@ -213,24 +213,19 @@ async def next_page(client: Client, query: CallbackQuery):
     pre = "filep" if secure else "file"
 
     buttons = []
-    for file in files:
+    for i, file in enumerate(files):
+        style = enums.ButtonStyle.PRIMARY if i % 2 == 0 else enums.ButtonStyle.DEFAULT
         if settings_data["button"]:
             buttons.append([
                 InlineKeyboardButton(
                     f"🎬 {file.file_name}",
                     callback_data=f"{pre}#{file.file_id}",
-                    style=enums.ButtonStyle.SUCCESS,
-                ),
-                InlineKeyboardButton(
-                    f"💾 {get_size(file.file_size)}",
-                    callback_data=f"{pre}#{file.file_id}",
-                    style=enums.ButtonStyle.PRIMARY,
-                ),
+                    style=style,
+                )
             ])
         else:
             buttons.append([
-                InlineKeyboardButton(file.file_name, callback_data=f"{pre}#{file.file_id}", style=enums.ButtonStyle.SUCCESS),
-                InlineKeyboardButton(get_size(file.file_size), callback_data=f"{pre}#{file.file_id}", style=enums.ButtonStyle.PRIMARY),
+                InlineKeyboardButton(file.file_name, callback_data=f"{pre}#{file.file_id}", style=style)
             ])
 
     page = math.ceil(offset / 10) + 1
@@ -242,7 +237,7 @@ async def next_page(client: Client, query: CallbackQuery):
             InlineKeyboardButton("⏪ BACK", callback_data=f"next_{req}_{key}_{offset-10}", style=enums.ButtonStyle.PRIMARY)
         )
     nav.append(
-        InlineKeyboardButton(f"📃 {page}/{total_pages}", callback_data="pages", style=enums.ButtonStyle.SECONDARY)
+        InlineKeyboardButton(f"📃 {page}/{total_pages}", callback_data="pages", style=enums.ButtonStyle.DEFAULT)
     )
     if next_offset:
         nav.append(
@@ -376,12 +371,13 @@ async def auto_filter(client: Client, message, spoll=None):
     if offset:
         key = f"{message.chat.id}-{message.id}"
         BUTTONS[key] = search
+        total_pages = math.ceil(total / 10)
         buttons.append([
-            InlineKeyboardButton("🗓 1", callback_data="pages", style=enums.ButtonStyle.PRIMARY),
+            InlineKeyboardButton(f"📃 1/{total_pages}", callback_data="pages", style=enums.ButtonStyle.PRIMARY),
             InlineKeyboardButton(
                 "NEXT ⏩",
                 callback_data=f"next_{message.from_user.id}_{key}_{offset}",
-                style=enums.ButtonStyle.PRIMARY,
+                style=enums.ButtonStyle.DEFAULT,
             ),
         ])
 
