@@ -187,6 +187,15 @@ async def get_file_details(file_id: str) -> List[Media]:
     cursor = Media.find({"file_id": file_id})
     return await cursor.to_list(length=1)
 
+async def delete_file(file_id: str) -> bool:
+    """Delete a file from the database by its file_id."""
+    try:
+        result = await Media.collection.delete_one({"_id": file_id})
+        return result.deleted_count > 0
+    except Exception as e:
+        logger.exception(f"Failed to delete file {file_id}: {e}")
+        return False
+
 
 # ─── Telegram File ID Encoding ───────────────────────────────────────────
 def encode_file_id(data: bytes) -> str:
