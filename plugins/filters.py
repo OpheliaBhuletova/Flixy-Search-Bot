@@ -8,6 +8,8 @@ from database.filters_mdb import (
     add_filter,
     get_filters,
     count_filters,
+    delete_filter,
+    del_all,
 )
 from database.connections_mdb import active_connection
 from bot.utils.helpers import get_file_id, schedule_delete_message
@@ -146,3 +148,66 @@ async def list_filters_handler(client: Client, message: Message):
         await message.reply_text(
             text, quote=True, parse_mode=enums.ParseMode.MARKDOWN
         )
+
+@Client.on_message(filters.command(["del", "delete"]) & filters.incoming)
+async def delete_filter_handler(client: Client, message: Message):
+    user_id = message.from_user.id if message.from_user else None
+    if not user_id:
+        return
+
+    chat_type = message.chat.type
+    args = message.text.html.split(None, 1)
+
+    if chat_type == enums.ChatType.PRIVATE:
+        grp_id = await active_connection(str(user_id))
+        if not grp_id:
+            return await message.reply_text(
+                "I'm not connected to any groups!", quote=True
+            )
+        chat = await client.get_chat(grp_id)
+    else:
+        grp_id = message.chat.id
+
+    member = await client.get_chat_member(grp_id, user_id)
+    if (
+        member.status not in (enums.ChatMemberStatus.ADMINISTRATOR, enums.ChatMemberStatus.OWNER)
+        and str(user_id) not in map(str, settings.ADMINS)
+    ):
+        return
+
+    if len(args) < 2:
+        return await message.reply_text("Command incomplete :(", quote=True)
+
+    extracted = split_quotes(args[1])
+    keyword = extracted[0].lower()
+
+    await delete_filter(message, keyword, grp_id)
+
+@Client.on_message(filters.command(["delall"]) & filters.incoming)
+async def del_all_handler(client: Client, message: Message):
+    user_id = message.from_user.id if message.from_user else None
+    if not user_id:
+        return
+
+    chat_type = message.chat.type
+
+    if chat_type == enums.ChatType.PRIVATE:
+        grp_id = await active_connection(str(user_id))
+        if not grp_id:
+            return await message.reply_text(
+                "I'm not connected to any groups!", quote=True
+            )
+        chat = await client.get_chat(grp_id)
+        title = chat.title
+    else:
+        grp_id = message.chat.id
+        title = message.chat.title
+
+    member = await client.get_chat_member(grp_id, user_id)
+    if (
+        member.status not in (enums.ChatMemberStatus.OWNER,)
+        and str(user_id) not in map(str, settings.ADMINS)
+    ):
+        return await message.reply_text("Only the owner can delete all filters!", quote=True)
+
+    await del_all(message, grp_id, title)

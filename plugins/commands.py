@@ -15,6 +15,7 @@ from bot.utils.cache import RuntimeCache
 from bot.utils.helpers import get_file_id
 
 from database.users_chats_db import db
+from database.ia_filterdb import delete_file as db_delete_file, unpack_new_file_id
 
 logger = logging.getLogger(__name__)
 
@@ -139,6 +140,41 @@ async def gen_file_id(client: Client, message: Message):
             parse_mode=enums.ParseMode.HTML
         )
 
+@Client.on_message(filters.command("delete") & filters.private)
+async def delete_file_command(client: Client, message: Message):
+    """Delete a file from the database (admin only).
+    
+    Usage:
+    - Reply to a file with /delete
+    - Or use /delete <file_id>
+    """
+    if message.from_user.id not in settings.ADMINS:
+        return
+        
+    file_id = None
+    if message.reply_to_message:
+        file_info = get_file_id(message.reply_to_message)
+        if file_info:
+            file_id = file_info.file_id
+            
+    if not file_id and len(message.command) > 1:
+        file_id = message.command[1]
+        
+    if not file_id:
+        await message.reply("❌ Please reply to a file or provide a file_id to delete.")
+        return
+        
+    try:
+        db_file_id, _ = unpack_new_file_id(file_id)
+    except Exception:
+        db_file_id = file_id # fallback if already unpacked
+        
+    deleted = await db_delete_file(db_file_id)
+    if deleted:
+        await message.reply("✅ <b>File successfully deleted from database!</b>", parse_mode=enums.ParseMode.HTML)
+        logger.info(f"Admin {message.from_user.id} deleted file {db_file_id} from database.")
+    else:
+        await message.reply("❌ <b>File not found in database or failed to delete.</b>", parse_mode=enums.ParseMode.HTML)
 
 @Client.on_message(filters.command("setstartup") & filters.private)
 async def set_startup_image(client: Client, message: Message):
@@ -392,7 +428,7 @@ async def publish_updates_handler(client: Client, message: Message):
             )
             return
         
-        update_sticker = "CAACAgUAAxkBAAOXaeUiJNVeBbgSpicTUbvvVllB8JYAAoweAALZY2BVBctCzpA2xKseBA"
+        update_sticker = "CAACAgUAAxkBAAIB4mn0XcJbxxs96ASwhzJJA0fzlBAKAAJnHAACKdqhV8yhB5pnUWmkHgQ"
         fallback_used = False
         
         # ──── PHOTO MODE ────
