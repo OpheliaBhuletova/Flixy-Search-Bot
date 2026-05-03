@@ -16,7 +16,7 @@ from bot.config import settings
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.WARNING)
 
-from database.mongo import get_db
+from database.mongo import get_db, get_inline_collection, get_pm_collection, get_collection
 from umongo import Instance
 
 instance = Instance.from_db(get_db())
@@ -49,9 +49,13 @@ class Media(Document):
 
 
 # ─── Save Media ──────────────────────────────────────────────────────────
-async def save_file(media) -> Tuple[bool, int, str]:
+async def save_file(media, db_type: str = "default") -> Tuple[bool, int, str]:
     """
     Store media document and return status plus normalized movie title.
+
+    Args:
+        media: Media object to save
+        db_type: "default", "inline", or "pm" - which collection to save to
 
     Returns:
         (True, 1, title)   → saved
@@ -62,38 +66,51 @@ async def save_file(media) -> Tuple[bool, int, str]:
     file_id, file_ref = unpack_new_file_id(media.file_id)
     file_name = re.sub(r"[_\-\.\+]", " ", str(media.file_name))
     _display_title = _announcement_key(file_name)
+    
+    file_data = {
+        "_id": file_id,
+        "file_ref": file_ref,
+        "file_name": file_name,
+        "file_size": media.file_size,
+        "file_type": media.file_type,
+        "mime_type": getattr(media, "mime_type", None),
+        "caption": media.caption.html if media.caption else None,
+        "created_at": datetime.now(timezone.utc),
+    }
+    
     try:
-        file = Media(
-            file_id=file_id,
-            file_ref=file_ref,
-            file_name=file_name,
-            file_size=media.file_size,
-            file_type=media.file_type,
-            mime_type = getattr(media, "mime_type", None),
-            caption=media.caption.html if media.caption else None,
-            created_at=datetime.now(timezone.utc),
-        )
-    except ValidationError:
-        logger.exception("Validation error while saving media")
-        return False, 2, _display_title or file_name
-
-    try:
-        await file.commit()
+        collection = get_collection(db_type)
+        await collection.insert_one(file_data)
         return True, 1, _display_title or file_name
     except DuplicateKeyError:
         return False, 0, _display_title or file_name
-    except Exception:
-        logger.exception("Unexpected error while saving media")
+    except Exception as e:
+        logger.exception(f"Unexpected error while saving media to {db_type}: {e}")
         return False, 2, _display_title or file_name
 
 # ─── Search Engine ───────────────────────────────────────────────────────
-async def get_search_results(
+async def _generic_search(
     query: str,
+    collection,
     file_type: str = None,
     max_results: int = 10,
     offset: int = 0,
     filter: bool = False,
 ):
+    """
+    Internal generic search function that works with any collection.
+    
+    Args:
+        query: Search query string
+        collection: Motor collection to search in
+        file_type: Optional file type filter
+        max_results: Number of results per page
+        offset: Pagination offset
+        filter: Filter flag (unused but kept for compatibility)
+    
+    Returns:
+        (files, next_offset, total_results)
+    """
     query = query.strip()
 
     if not query:
@@ -116,7 +133,7 @@ async def get_search_results(
     if file_type:
         mongo_filter["file_type"] = file_type
 
-    total_results = await Media.count_documents(mongo_filter)
+    total_results = await collection.count_documents(mongo_filter)
     
     # Limit max fetch to avoid loading entire database into memory for broad queries
     MAX_MEMORY_RESULTS = 100
@@ -131,7 +148,7 @@ async def get_search_results(
 
     # Fetch up to MAX_MEMORY_RESULTS instead of just max_results for the current page
     cursor = (
-        Media.find(mongo_filter)
+        collection.find(mongo_filter)
         .sort(sort_field, -1)
         .limit(MAX_MEMORY_RESULTS)
     )
@@ -147,7 +164,7 @@ async def get_search_results(
         other_matches = []
 
         for file in all_files:
-            name = (file.file_name or "").strip().lower()
+            name = (file.get("file_name") or "").strip().lower()
 
             if name == query_lower:
                 exact_matches.append(file)
@@ -167,7 +184,7 @@ async def get_search_results(
             if "english" in name or "eng" in name: return 5
             return 6
 
-        sort_key = lambda x: (get_lang_rank(x.file_name or ""), -x.file_size)
+        sort_key = lambda x: (get_lang_rank(x.get("file_name") or ""), -x.get("file_size", 0))
         
         exact_matches.sort(key=sort_key)
         startswith_matches.sort(key=sort_key)
@@ -182,9 +199,59 @@ async def get_search_results(
     return files, next_offset, total_results
 
 
+async def get_search_results(
+    query: str,
+    file_type: str = None,
+    max_results: int = 10,
+    offset: int = 0,
+    filter: bool = False,
+):
+    """
+    Search with automatic database routing based on ENABLE_MULTI_DB setting.
+    When multi-DB is disabled, uses default collection.
+    """
+    collection = get_collection("default")
+    return await _generic_search(query, collection, file_type, max_results, offset, filter)
+
+
+async def get_inline_search_results(
+    query: str,
+    file_type: str = None,
+    max_results: int = 10,
+    offset: int = 0,
+    filter: bool = False,
+):
+    """Search the inline collection."""
+    collection = get_inline_collection()
+    return await _generic_search(query, collection, file_type, max_results, offset, filter)
+
+
+async def get_pm_search_results(
+    query: str,
+    file_type: str = None,
+    max_results: int = 10,
+    offset: int = 0,
+    filter: bool = False,
+):
+    """Search the PM collection."""
+    collection = get_pm_collection()
+    return await _generic_search(query, collection, file_type, max_results, offset, filter)
+
+
 # ─── File Lookup ─────────────────────────────────────────────────────────
-async def get_file_details(file_id: str) -> List[Media]:
-    cursor = Media.find({"file_id": file_id})
+async def get_file_details(file_id: str, db_type: str = "default") -> List:
+    """
+    Lookup file by ID from specified collection.
+    
+    Args:
+        file_id: File ID to search for
+        db_type: "default", "inline", or "pm"
+    
+    Returns:
+        List of matching file documents
+    """
+    collection = get_collection(db_type)
+    cursor = collection.find({"file_id": file_id})
     return await cursor.to_list(length=1)
 
 

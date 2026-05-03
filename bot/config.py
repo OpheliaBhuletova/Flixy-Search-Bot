@@ -58,6 +58,11 @@ class Settings(BaseSettings):
     DATABASE_NAME: str = "Telegram"
     COLLECTION_NAME: str = "channel_files"
 
+    # ─── Multi-Database Mode ──────────────────────────────────────────
+    ENABLE_MULTI_DB: bool = False  # Enable separate inline/PM databases
+    COLLECTION_NAME_INLINE: str = "channel_files_inline"  # Inline search collection
+    COLLECTION_NAME_PM: str = "channel_files_pm"  # PM search collection
+
     # ─── Others ────────────────────────────────────────────────────────
     LOG_CHANNEL: int = 0
     SUPPORT_CHAT: str = "TitanHelpDesk"
