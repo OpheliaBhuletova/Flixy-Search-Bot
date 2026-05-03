@@ -428,7 +428,7 @@ async def publish_updates_handler(client: Client, message: Message):
             )
             return
         
-        update_sticker = "CAACAgUAAxkBAAIB4mn0XcJbxxs96ASwhzJJA0fzlBAKAAJnHAACKdqhV8yhB5pnUWmkHgQ"
+        update_sticker = "CAACAgUAAxkBAAICTGn3g_CaEso2M1W2_bFYCz7a9E8qAAJXHgACe-q5VxULs9EZrbCYHgQ"
         fallback_used = False
         
         # ──── PHOTO MODE ────
