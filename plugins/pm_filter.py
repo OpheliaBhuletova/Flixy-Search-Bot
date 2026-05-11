@@ -28,6 +28,7 @@ from database.ia_filterdb import (
     Media,
     get_file_details,
     get_search_results,
+    get_pm_search_results_with_fallback,
     save_file,
 )
 from database.filters_mdb import del_all, find_filter, get_filters
@@ -202,7 +203,7 @@ async def next_page(client: Client, query: CallbackQuery):
     if not search:
         return await query.answer("Old message expired", show_alert=True)
 
-    files, next_offset, total = await get_search_results(
+    files, next_offset, total = await get_pm_search_results_with_fallback(
         search, offset=offset, filter=True
     )
 
@@ -216,17 +217,19 @@ async def next_page(client: Client, query: CallbackQuery):
     buttons = []
     for i, file in enumerate(files):
         style = enums.ButtonStyle.PRIMARY if i % 2 == 0 else enums.ButtonStyle.DEFAULT
+        file_id = file.get('_id') if isinstance(file, dict) else file.file_id
+        file_name = file.get('file_name') if isinstance(file, dict) else file.file_name
         if settings_data["button"]:
             buttons.append([
                 InlineKeyboardButton(
-                    f"🎬 {file.file_name}",
-                    callback_data=f"{pre}#{file.file_id}",
+                    f"🎬 {file_name}",
+                    callback_data=f"{pre}#{file_id}",
                     style=style,
                 )
             ])
         else:
             buttons.append([
-                InlineKeyboardButton(file.file_name, callback_data=f"{pre}#{file.file_id}", style=style)
+                InlineKeyboardButton(file_name, callback_data=f"{pre}#{file_id}", style=style)
             ])
 
     page = math.ceil(offset / 10) + 1
@@ -275,12 +278,12 @@ async def callback_router(client: Client, query: CallbackQuery):
             return await query.answer("File not found", show_alert=True)
 
         file = files[0]
-        caption = file.caption or file.file_name
-        size = get_size(file.file_size)
+        caption = (file.get('caption') if isinstance(file, dict) else file.caption) or (file.get('file_name') if isinstance(file, dict) else file.file_name)
+        size = get_size(file.get('file_size') if isinstance(file, dict) else file.file_size)
 
         if settings.CUSTOM_FILE_CAPTION:
             caption = settings.CUSTOM_FILE_CAPTION.format(
-                file_name=file.file_name or "",
+                file_name=file.get('file_name') if isinstance(file, dict) else file.file_name or "",
                 file_size=size,
                 file_caption=caption or "",
             )
@@ -290,7 +293,8 @@ async def callback_router(client: Client, query: CallbackQuery):
             sent_msg = await client.send_cached_media(
                 query.from_user.id,
                 file_id,
-                caption=caption,
+                caption=f"<pre>{caption}</pre>" if caption else None,
+                parse_mode=enums.ParseMode.HTML,
                 protect_content=(ident == "filep"),
             )
             await query.answer("Sent in PM", show_alert=True)
@@ -366,7 +370,7 @@ async def auto_filter(client: Client, message, spoll=None):
             except Exception:
                 pass
         
-        files, offset, total = await get_search_results(search.lower(), filter=True)
+        files, offset, total = await get_pm_search_results_with_fallback(search.lower(), filter=True)
         if not files:
             # Clear draft on spell check or no results
             try:
@@ -389,10 +393,12 @@ async def auto_filter(client: Client, message, spoll=None):
 
     for i, file in enumerate(files):
         style = enums.ButtonStyle.PRIMARY if i % 2 == 0 else enums.ButtonStyle.DEFAULT
+        file_id = file.get('_id') if isinstance(file, dict) else file.file_id
+        file_name = file.get('file_name') if isinstance(file, dict) else file.file_name
         buttons.append([
             InlineKeyboardButton(
-                f"{file.file_name}",
-                callback_data=f"{pre}#{file.file_id}",
+                f"{file_name}",
+                callback_data=f"{pre}#{file_id}",
                 style=style,
             )
         ])

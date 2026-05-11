@@ -88,6 +88,36 @@ async def save_file(media, db_type: str = "default") -> Tuple[bool, int, str]:
         logger.exception(f"Unexpected error while saving media to {db_type}: {e}")
         return False, 2, _display_title or file_name
 
+
+async def save_file_inline(media) -> Tuple[bool, int, str]:
+    """
+    Save media to the inline search collection.
+    
+    Args:
+        media: Media object to save
+    
+    Returns:
+        (True, 1, title)   → saved
+        (False, 0, title)  → duplicate
+        (False, 2, title)  → error
+    """
+    return await save_file(media, db_type="inline")
+
+
+async def save_file_pm(media) -> Tuple[bool, int, str]:
+    """
+    Save media to the PM search collection.
+    
+    Args:
+        media: Media object to save
+    
+    Returns:
+        (True, 1, title)   → saved
+        (False, 0, title)  → duplicate
+        (False, 2, title)  → error
+    """
+    return await save_file(media, db_type="pm")
+
 # ─── Search Engine ───────────────────────────────────────────────────────
 async def _generic_search(
     query: str,
@@ -241,18 +271,40 @@ async def get_pm_search_results(
 # ─── File Lookup ─────────────────────────────────────────────────────────
 async def get_file_details(file_id: str, db_type: str = "default") -> List:
     """
-    Lookup file by ID from specified collection.
+    Lookup file by ID from specified collection, with fallback to other collections.
     
     Args:
         file_id: File ID to search for
-        db_type: "default", "inline", or "pm"
+        db_type: "default", "inline", or "pm" - primary collection to search
     
     Returns:
         List of matching file documents
     """
+    # Try the specified collection first
     collection = get_collection(db_type)
-    cursor = collection.find({"file_id": file_id})
-    return await cursor.to_list(length=1)
+    cursor = collection.find({"_id": file_id})
+    result = await cursor.to_list(length=1)
+    
+    if result:
+        return result
+    
+    # If not found and db_type is "default", try other collections
+    if db_type == "default":
+        # Try PM collection
+        pm_collection = get_pm_collection()
+        cursor = pm_collection.find({"_id": file_id})
+        result = await cursor.to_list(length=1)
+        if result:
+            return result
+        
+        # Try inline collection
+        inline_collection = get_inline_collection()
+        cursor = inline_collection.find({"_id": file_id})
+        result = await cursor.to_list(length=1)
+        if result:
+            return result
+    
+    return []
 
 
 # ─── Telegram File ID Encoding ───────────────────────────────────────────
@@ -346,6 +398,51 @@ async def announce_title(title: str) -> bool:
         logger.exception(f"Error announcing title '{title}': {e}")
         # On error, assume it's already announced to prevent repeated errors
         return False
+
+
+# ─── Fallback Search Wrappers (Phase 5: Backward Compatibility) ──────
+async def get_inline_search_results_with_fallback(
+    query: str,
+    file_type: str = None,
+    max_results: int = 10,
+    offset: int = 0,
+    filter: bool = False,
+):
+    """
+    Search inline collection with automatic fallback.
+    
+    If ENABLE_MULTI_DB is True, uses get_inline_search_results().
+    If False, falls back to get_search_results() (single DB mode).
+    
+    Returns:
+        (files, next_offset, total_results)
+    """
+    if settings.ENABLE_MULTI_DB:
+        return await get_inline_search_results(query, file_type, max_results, offset, filter)
+    else:
+        return await get_search_results(query, file_type, max_results, offset, filter)
+
+
+async def get_pm_search_results_with_fallback(
+    query: str,
+    file_type: str = None,
+    max_results: int = 10,
+    offset: int = 0,
+    filter: bool = False,
+):
+    """
+    Search PM collection with automatic fallback.
+    
+    If ENABLE_MULTI_DB is True, uses get_pm_search_results().
+    If False, falls back to get_search_results() (single DB mode).
+    
+    Returns:
+        (files, next_offset, total_results)
+    """
+    if settings.ENABLE_MULTI_DB:
+        return await get_pm_search_results(query, file_type, max_results, offset, filter)
+    else:
+        return await get_search_results(query, file_type, max_results, offset, filter)
 
 
 def unpack_new_file_id(new_file_id: str) -> Tuple[str, str]:

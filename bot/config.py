@@ -54,14 +54,40 @@ class Settings(BaseSettings):
     SUDO_USERS: List[Union[int, str]] = []
 
     # ─── Database ──────────────────────────────────────────────────────
+    # Original single-cluster configuration (used when ENABLE_MULTI_DB=False)
     DATABASE_URL: str
     DATABASE_NAME: str = "Telegram"
     COLLECTION_NAME: str = "channel_files"
 
-    # ─── Multi-Database Mode ──────────────────────────────────────────
-    ENABLE_MULTI_DB: bool = False  # Enable separate inline/PM databases
-    COLLECTION_NAME_INLINE: str = "channel_files_inline"  # Inline search collection
-    COLLECTION_NAME_PM: str = "channel_files_pm"  # PM search collection
+    # ─── Multi-Cluster Mode (Phase 1-5) ──────────────────────────────
+    # Dual-cluster mode enables separation of inline and PM searches into
+    # different MongoDB Atlas projects/clusters. This allows for:
+    # - Separate free clusters for inline and PM (MongoDB Atlas limit)
+    # - Different indexing strategies per cluster
+    # - Targeted search results (inline from inline cluster, PM from PM cluster)
+    # - Gradual rollout and easy rollback to single-cluster mode
+    #
+    # When ENABLE_MULTI_DB is False (default):
+    #   - All searches use the single unified cluster (DATABASE_URL, DATABASE_NAME)
+    #   - Backward compatible with existing deployments
+    #   - Fallback functions automatically use single cluster
+    #
+    # When ENABLE_MULTI_DB is True:
+    #   - Inline searches use DATABASE_URL_INLINE + DATABASE_NAME_INLINE
+    #   - PM searches use DATABASE_URL_PM + DATABASE_NAME_PM
+    #   - Indexing prompts user to select target database
+    #   - Full dual-cluster separation with database routing
+    ENABLE_MULTI_DB: bool = False  # Toggle dual-cluster mode (default: False for backward compatibility)
+    
+    # Inline searches cluster (MongoDB Atlas Project 1)
+    DATABASE_URL_INLINE: Optional[str] = None  # MongoDB URL for inline cluster (fallback to DATABASE_URL if None)
+    DATABASE_NAME_INLINE: str = "Telegram_Inline"  # Database name in inline cluster
+    COLLECTION_NAME_INLINE: str = "channel_files"  # Collection in inline database
+    
+    # PM searches cluster (MongoDB Atlas Project 2)
+    DATABASE_URL_PM: Optional[str] = None  # MongoDB URL for PM cluster (fallback to DATABASE_URL if None)
+    DATABASE_NAME_PM: str = "Telegram_PM"  # Database name in PM cluster
+    COLLECTION_NAME_PM: str = "channel_files"  # Collection in PM database
 
     # ─── Others ────────────────────────────────────────────────────────
     LOG_CHANNEL: int = 0

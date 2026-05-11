@@ -12,7 +12,7 @@ from pyrogram.errors.exceptions.bad_request_400 import QueryIdInvalid
 from bot.config import settings
 from bot.utils.cache import RuntimeCache
 from bot.utils.helpers import get_size
-from database.ia_filterdb import get_search_results
+from database.ia_filterdb import get_inline_search_results_with_fallback
 
 logger = logging.getLogger(__name__)
 
@@ -58,7 +58,7 @@ async def inline_query_handler(client: Client, query: InlineQuery):
         ]]
     )
 
-    files, next_offset, total = await get_search_results(
+    files, next_offset, total = await get_inline_search_results_with_fallback(
         keyword,
         file_type=file_type,
         max_results=10,
@@ -68,9 +68,10 @@ async def inline_query_handler(client: Client, query: InlineQuery):
     results = []
 
     for file in files:
-        title = file.file_name
-        size = get_size(file.file_size)
-        caption = file.caption
+        title = file.get('file_name') if isinstance(file, dict) else file.file_name
+        size = get_size(file.get('file_size') if isinstance(file, dict) else file.file_size)
+        caption = file.get('caption') if isinstance(file, dict) else file.caption
+        file_id = file.get('_id') if isinstance(file, dict) else file.file_id
 
         if settings.CUSTOM_FILE_CAPTION:
             try:
@@ -88,9 +89,9 @@ async def inline_query_handler(client: Client, query: InlineQuery):
         results.append(
             InlineQueryResultCachedDocument(
                 title=title,
-                document_file_id=file.file_id,
+                document_file_id=file_id,
                 caption=caption,
-                description=f"Size: {size}\nType: {file.file_type}",
+                description=f"Size: {size}\nType: {file.get('file_type') if isinstance(file, dict) else file.file_type}",
                 reply_markup=reply_markup,
             )
         )

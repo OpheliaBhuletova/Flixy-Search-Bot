@@ -1,13 +1,16 @@
 import logging
 import motor.motor_asyncio
-
+from typing import List, Dict, Optional
+ 
 from bot.config import settings
-
 logger = logging.getLogger(__name__)
-logger.setLevel(logging.WARNING)
+logger.setLevel(logging.INFO) # Changed to INFO for debugging
 
 class Database:
+    __version__ = "1.1" # Added for debugging purposes
+
     def __init__(self, uri, database_name):
+        logger.info(f"Initializing Database class version {self.__version__}") # Log version
         self._client = motor.motor_asyncio.AsyncIOMotorClient(uri)
         self.db = self._client[database_name]
         self.col = self.db.users
@@ -51,6 +54,7 @@ class Database:
                 "is_banned": False,
                 "ban_reason": "",
             },
+            "watchlist": [], # Initialize watchlist for new users
         }
 
     async def add_user(self, id, name):
@@ -68,6 +72,44 @@ class Database:
 
     async def delete_user(self, user_id):
         await self.col.delete_many({"id": int(user_id)})
+
+    async def get_user(self, user_id: int) -> Optional[Dict]:
+        """Retrieves a user document by user_id."""
+        return await self.col.find_one({"id": int(user_id)})
+
+    # ─── Watchlist ───────────────────────────────────────────────────────
+    async def get_watchlist(self, user_id: int) -> List[Dict]:
+        """Retrieves the watchlist for a user."""
+        user = await self.col.find_one({"id": int(user_id)})
+        if user:
+            return user.get("watchlist", [])
+        return []
+
+    async def add_to_watchlist(self, user_id: int, tmdb_id: int, media_type: str) -> bool:
+        """Adds a TV series to the user's watchlist. Returns True if added, False if already exists."""
+        # Check if item already exists in watchlist
+        user = await self.col.find_one(
+            {"id": int(user_id), "watchlist": {"$elemMatch": {"tmdb_id": tmdb_id, "media_type": media_type}}}
+        )
+        
+        if user:
+            return False  # Already in watchlist
+        
+        # Add to watchlist
+        await self.col.update_one(
+            {"id": int(user_id)},
+            {"$push": {"watchlist": {"tmdb_id": tmdb_id, "media_type": media_type}}},
+            upsert=True
+        )
+        return True
+
+    async def remove_from_watchlist(self, user_id: int, tmdb_id: int, media_type: str) -> bool:
+        """Removes a TV series from the user's watchlist. Returns True if removed, False if not found."""
+        result = await self.col.update_one(
+            {"id": int(user_id)},
+            {"$pull": {"watchlist": {"tmdb_id": tmdb_id, "media_type": media_type}}}
+        )
+        return result.modified_count > 0
 
     # ─── Ban System ──────────────────────────────────────────────────────
     async def ban_user(self, user_id, ban_reason="No Reason"):
@@ -196,6 +238,14 @@ class Database:
         """Return True if ads are enabled in persistent storage, else False."""
         doc = await self.db.bot_settings.find_one({"_id": "ads_enabled"})
         return bool(doc and doc.get("enabled", False))
+
+    # ─── Watchlist Notifications ──────────────────────────────────────
+    async def get_users_with_series_in_watchlist(self, tmdb_id: int, media_type: str = "tv") -> List[int]:
+        """Find all users who have a specific series in their watchlist."""
+        users = await self.col.find(
+            {"watchlist": {"$elemMatch": {"tmdb_id": tmdb_id, "media_type": media_type}}}
+        ).to_list(None)
+        return [user["id"] for user in users if "id" in user]
 
     # ─── Stats ───────────────────────────────────────────────────────────
     async def get_db_size(self):

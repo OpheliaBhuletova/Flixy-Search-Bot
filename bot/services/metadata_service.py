@@ -477,7 +477,11 @@ async def get_poster(
     }
 
 async def search_tmdb_titles(query: str, preferred_type: Optional[str] = None, limit: int = 10) -> List[dict]:
+    import logging
+    logger = logging.getLogger(__name__)
+    
     title, year = _extract_year_and_title(query)
+    logger.debug(f"🔍 TMDB search - Query: '{query}' → Extracted title: '{title}', year: {year}, preferred_type: {preferred_type}")
 
     data = await _tmdb_request(
         "search/multi",
@@ -486,27 +490,39 @@ async def search_tmdb_titles(query: str, preferred_type: Optional[str] = None, l
             "include_adult": "false",
         },
     )
+    
     if not data:
+        logger.warning(f"🔍 TMDB API returned no data for query: {title}")
         return []
+    
+    total_results = len(data.get("results", []))
+    logger.debug(f"🔍 TMDB returned {total_results} total results for '{title}'")
 
     results = []
-    for item in data.get("results") or []:
+    for idx, item in enumerate(data.get("results") or []):
         media_type = item.get("media_type")
+        item_title = item.get("title") or item.get("name")
+        logger.debug(f"🔍   Result {idx+1}: '{item_title}' (type: {media_type})")
+        
         if media_type not in ("movie", "tv"):
+            logger.debug(f"🔍     → Skipped: unsupported media_type '{media_type}'")
             continue
         if preferred_type and media_type != preferred_type:
+            logger.debug(f"🔍     → Skipped: type '{media_type}' doesn't match preferred '{preferred_type}'")
             continue
 
         release_date = item.get("release_date") or item.get("first_air_date") or ""
         item_year = release_date[:4] if release_date else None
 
         if year and item_year != year:
+            logger.debug(f"🔍     → Skipped: year {item_year} doesn't match query year {year}")
             continue
 
+        logger.debug(f"🔍     → ✅ Accepted: ID={item.get('id')}")
         results.append(
             {
                 "id": item.get("id"),
-                "title": item.get("title") or item.get("name"),
+                "title": item_title,
                 "year": item_year or "N/A",
                 "media_type": media_type,
                 "type_label": "TV Series" if media_type == "tv" else "Movie",
@@ -516,6 +532,7 @@ async def search_tmdb_titles(query: str, preferred_type: Optional[str] = None, l
         if len(results) >= limit:
             break
 
+    logger.debug(f"🔍 Final results: {len(results)} items returned")
     return results
 
 async def get_imdb_info(query: str, *, imdb_id: bool = False, id: bool = False) -> Optional[Dict[str, Any]]:

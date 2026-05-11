@@ -13,6 +13,7 @@ class Texts:
 👋 Hey Nibin, welcome to <b>F L I X Y</b>
 
 🎬 <b>Search movies instantly</b> — just type the name inline.
+👀 Keep track of your favorite TV series with the new Watchlist feature! Use /addwatchlist to add series.
 """
 
     HELP_TXT = """
@@ -174,6 +175,8 @@ Helpful commands for information and utilities.
 • `/info` — detailed user information  
 • `/imdb` — fetch IMDb movie details  
 • `/search` — search movies manually
+• `/addwatchlist` — add an ongoing TV series to your watchlist
+• `/mywatchlist` — view your watchlist
 """
 
     # ───────────────────────────────────

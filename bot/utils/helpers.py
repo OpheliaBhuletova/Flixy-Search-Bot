@@ -1,6 +1,7 @@
 import asyncio
 import logging
-from typing import Union
+from typing import Union, Optional
+import re
 
 from pyrogram import enums
 from pyrogram.types import Message
@@ -139,3 +140,52 @@ def schedule_delete_message(client, chat_id: int, message_id: int, delay_seconds
     except RuntimeError:
         # If there's no running loop, just ignore scheduling
         logger.debug("Event loop not running; cannot schedule deletion for %s", message_id)
+
+
+def extract_series_name_from_file(file_name: str, caption: Optional[str] = None) -> Optional[str]:
+    """Extract TV series name from file name or caption.
+    
+    Supports formats like:
+    - "Series Name S01E01.mkv"
+    - "Series.Name.S01E01.mkv"
+    - "Series Name - Season 01 Episode 01.mkv"
+    - Caption might contain series name
+    
+    Returns the series name without episode info, or None if not found.
+    """
+    # Try caption first if available
+    if caption:
+        # Caption might contain series info in HTML format
+        text = caption.replace("<b>", "").replace("</b>", "").replace("<i>", "").replace("</i>", "")
+        # Extract just the first line which often has the series name
+        first_line = text.split("\n")[0].strip()
+        if first_line and len(first_line) > 2:
+            return first_line
+    
+    if not file_name:
+        return None
+    
+    # Remove file extension
+    name_without_ext = re.sub(r"\.[^.]+$", "", file_name)
+    
+    # Pattern: Look for S##E## (season/episode marker) and extract everything before it
+    # This handles both "Series.Name.S01E01" and "Series Name S01E01"
+    match = re.search(r"^(.+?)[\s\.]*[Ss]\d{1,2}[Ee]\d{1,2}", name_without_ext)
+    if match:
+        series_name = match.group(1).strip()
+        # Replace dots and extra spaces with single spaces
+        series_name = re.sub(r"[\.\s]+", " ", series_name).strip()
+        if series_name and len(series_name) > 1:
+            return series_name
+    
+    # Pattern: "Series Name - Season xx Episode xx"
+    match = re.search(r"^(.+?)\s*-\s*Season\s+\d+\s+Episode\s+\d+", name_without_ext, re.IGNORECASE)
+    if match:
+        return match.group(1).strip()
+    
+    # Pattern: "Series Name Season xx Episode xx"
+    match = re.search(r"^(.+?)\s+Season\s+\d+\s+Episode\s+\d+", name_without_ext, re.IGNORECASE)
+    if match:
+        return match.group(1).strip()
+    
+    return None

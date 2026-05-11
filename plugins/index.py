@@ -21,7 +21,8 @@ from pyrogram.errors.exceptions.bad_request_400 import (
 
 from bot.config import settings
 from bot.utils.cache import RuntimeCache
-from database.ia_filterdb import save_file, announce_title
+from database.ia_filterdb import save_file, save_file_inline, save_file_pm, announce_title
+from bot.utils.broadcast import new_movie_broadcast
 
 logger = logging.getLogger(__name__)
 
@@ -40,9 +41,10 @@ async def index_callback_handler(client: Client, query: CallbackQuery):
         RuntimeCache.cancel_index = True
         return await query.answer("Cancelling indexing...")
 
-    _, action, chat, last_msg_id, from_user = query.data.split("#")
-
-    if action == "reject":
+    parts = query.data.split("#")
+    
+    if parts[1] == "reject":
+        _, action, chat, last_msg_id, from_user = parts
         await query.message.delete()
         await client.send_message(
             int(from_user),
@@ -51,13 +53,48 @@ async def index_callback_handler(client: Client, query: CallbackQuery):
         )
         return
 
+    if parts[1] == "db_select":
+        # Database selection callback
+        _, action, db_type, chat, last_msg_id, from_user = parts
+        
+        if lock.locked():
+            return await query.answer(
+                "Please wait until the previous indexing finishes.",
+                show_alert=True,
+            )
+        
+        await query.answer(f"Indexing to {db_type.upper()} database... ⏳", show_alert=True)
+        
+        await query.message.edit(
+            f"Starting indexing to {db_type.upper()} database...",
+            reply_markup=InlineKeyboardMarkup(
+                    [[InlineKeyboardButton("Cancel", callback_data="index_cancel", style=enums.ButtonStyle.DANGER)]]))
+        
+        try:
+            chat = int(chat)
+        except ValueError:
+            pass
+        
+        await index_files_to_db(
+            client,
+            chat,
+            int(last_msg_id),
+            query.message,
+            db_type=db_type,
+        )
+        return
+    
+    # Accept callback - ask for database selection
+    _, action, chat, last_msg_id, from_user = parts[:5]
+    
+    if action != "accept":
+        return
+
     if lock.locked():
         return await query.answer(
             "Please wait until the previous indexing finishes.",
             show_alert=True,
         )
-
-    await query.answer("Processing... ⏳", show_alert=True)
 
     if int(from_user) not in settings.ADMINS:
         await client.send_message(
@@ -65,22 +102,49 @@ async def index_callback_handler(client: Client, query: CallbackQuery):
             f"Your submission for indexing `{chat}` was approved and will be processed soon.",
             reply_to_message_id=int(last_msg_id),
         )
-
-    await query.message.edit(
-        "Starting indexing...",
-        reply_markup=InlineKeyboardMarkup(
-                [[InlineKeyboardButton("Cancel", callback_data="index_cancel", style=enums.ButtonStyle.DANGER)]]))
-    try:
-        chat = int(chat)
-    except ValueError:
-        pass
-
-    await index_files_to_db(
-        client,
-        chat,
-        int(last_msg_id),
-        query.message,
-    )
+    
+    # Ask for database selection
+    if settings.ENABLE_MULTI_DB:
+        await query.answer()
+        db_buttons = [
+            [
+                InlineKeyboardButton(
+                    "📌 Inline DB",
+                    callback_data=f"index#db_select#inline#{chat}#{last_msg_id}#{from_user}",
+                    style=enums.ButtonStyle.PRIMARY,
+                )
+            ],
+            [
+                InlineKeyboardButton(
+                    "💬 PM DB",
+                    callback_data=f"index#db_select#pm#{chat}#{last_msg_id}#{from_user}",
+                    style=enums.ButtonStyle.PRIMARY,
+                )
+            ],
+        ]
+        return await query.message.edit(
+            f"Select target database for indexing `{chat}`:",
+            reply_markup=InlineKeyboardMarkup(db_buttons),
+        )
+    else:
+        # Multi-DB disabled, proceed with default
+        await query.answer("Processing... ⏳", show_alert=True)
+        await query.message.edit(
+            "Starting indexing...",
+            reply_markup=InlineKeyboardMarkup(
+                    [[InlineKeyboardButton("Cancel", callback_data="index_cancel", style=enums.ButtonStyle.DANGER)]]))
+        try:
+            chat = int(chat)
+        except ValueError:
+            pass
+        
+        await index_files_to_db(
+            client,
+            chat,
+            int(last_msg_id),
+            query.message,
+            db_type="default",
+        )
 
 
 # ─── SEND INDEX REQUEST ───────────────────────────────────────────────
@@ -198,6 +262,7 @@ async def index_files_to_db(
     chat_id: int,
     last_msg_id: int,
     status_msg: Message,
+    db_type: str = "default",
 ):
     total = duplicate = errors = deleted = no_media = unsupported = 0
     start_time = time.time()
@@ -238,8 +303,9 @@ async def index_files_to_db(
                     remaining_items = max(total_target - current, 0)
                     eta_seconds = round(remaining_items / speed, 2) if speed > 0 else 0
 
+                    db_label = "📌 Inline DB" if db_type == "inline" else "💬 PM DB" if db_type == "pm" else "📦 Default DB"
                     await status_msg.edit(
-                        "📦 <b>Indexing in Progress</b>\n\n"
+                        f"📦 <b>Indexing in Progress</b> ({db_label})\n\n"
                         f"<code>{progress_bar}</code> <b>{progress_percent}%</b>\n\n"
                         "<b>Summary:</b>\n"
                         f"• 📥 Fetched: <code>{current}</code> / <code>{total_target}</code>\n"
@@ -281,12 +347,12 @@ async def index_files_to_db(
                 media.file_type = msg.media.value
                 media.caption = msg.caption
 
-                saved, reason, title = await save_file(media)
+                saved, reason, title = await save_file(media, db_type=db_type)
 
                 if saved:
                     total += 1
                     if await announce_title(title):
-                        pass
+                        await new_movie_broadcast(client, title, msg)
                 elif reason == 0:
                     duplicate += 1
                 else:
@@ -304,8 +370,9 @@ async def index_files_to_db(
             processed_count = total + duplicate + deleted + no_media + unsupported + errors
             final_speed = round(processed_count / time_taken, 2) if time_taken > 0 else 0
 
+            db_label = "📌 Inline DB" if db_type == "inline" else "💬 PM DB" if db_type == "pm" else "📦 Default DB"
             await status_msg.edit(
-                "📦 <b>Indexing Complete</b>\n\n"
+                f"✅ <b>Indexing Complete</b> ({db_label})\n\n"
                 "<b>Summary:</b>\n"
                 f"• ✅ Saved: <code>{total}</code>\n"
                 f"• ♻️ Duplicates: <code>{duplicate}</code>\n"
