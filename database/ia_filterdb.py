@@ -126,6 +126,7 @@ async def _generic_search(
     max_results: int = 10,
     offset: int = 0,
     filter: bool = False,
+    sort_by_episode: bool = False,
 ):
     """
     Internal generic search function that works with any collection.
@@ -214,7 +215,39 @@ async def _generic_search(
             if "english" in name or "eng" in name: return 5
             return 6
 
-        sort_key = lambda x: (get_lang_rank(x.get("file_name") or ""), -x.get("file_size", 0))
+        def get_episode_rank(name: str) -> Tuple[float, float]:
+            name = name.lower()
+            match = re.search(r's(\d+)[\s_-]*e(\d+)', name)
+            if match:
+                return (float(match.group(1)), float(match.group(2)))
+            match = re.search(r'(?:e|ep|episode)[\s_-]*(\d+)', name)
+            if match:
+                return (1.0, float(match.group(1)))
+            return (9999.0, 9999.0)
+
+        def is_tv_series(name: str) -> bool:
+            """Check if filename contains season/episode info"""
+            name = name.lower()
+            return bool(re.search(r's\d+[\s_-]*e\d+', name)) or bool(re.search(r'(?:e|ep|episode)[\s_-]*\d+', name))
+
+        def sort_key_func(x):
+            """
+            Sort key that groups:
+            - TV Series by season/episode
+            - Movies by language then file size
+            """
+            name = x.get("file_name") or ""
+            if is_tv_series(name):
+                # TV Series: sort by season, episode
+                return (0, get_episode_rank(name), name)
+            else:
+                # Movies: sort by language, file size (desc)
+                return (1, get_lang_rank(name), -x.get("file_size", 0), name)
+
+        if sort_by_episode:
+            sort_key = lambda x: (get_episode_rank(x.get("file_name") or ""), get_lang_rank(x.get("file_name") or ""), -x.get("file_size", 0))
+        else:
+            sort_key = sort_key_func
         
         exact_matches.sort(key=sort_key)
         startswith_matches.sort(key=sort_key)
@@ -442,7 +475,7 @@ async def get_pm_search_results_with_fallback(
     if settings.ENABLE_MULTI_DB:
         return await get_pm_search_results(query, file_type, max_results, offset, filter)
     else:
-        return await get_search_results(query, file_type, max_results, offset, filter)
+        return await _generic_search(query, get_collection("default"), file_type, max_results, offset, filter)
 
 
 def unpack_new_file_id(new_file_id: str) -> Tuple[str, str]:

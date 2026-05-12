@@ -351,7 +351,7 @@ async def index_files_to_db(
 
                 if saved:
                     total += 1
-                    if await announce_title(title):
+                    if db_type == "default" and await announce_title(title):
                         await new_movie_broadcast(client, title, msg)
                 elif reason == 0:
                     duplicate += 1

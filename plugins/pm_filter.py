@@ -38,6 +38,7 @@ from bot.utils.helpers import (
     is_subscribed,
     get_settings,
     save_group_settings,
+    remove_file_extension,
     get_file_id,
     schedule_delete_message,
 )
@@ -219,17 +220,18 @@ async def next_page(client: Client, query: CallbackQuery):
         style = enums.ButtonStyle.PRIMARY if i % 2 == 0 else enums.ButtonStyle.DEFAULT
         file_id = file.get('_id') if isinstance(file, dict) else file.file_id
         file_name = file.get('file_name') if isinstance(file, dict) else file.file_name
+        display_name = remove_file_extension(file_name)  # Remove extension for display
         if settings_data["button"]:
             buttons.append([
                 InlineKeyboardButton(
-                    f"🎬 {file_name}",
+                    f"🎬 {display_name}",
                     callback_data=f"{pre}#{file_id}",
                     style=style,
                 )
             ])
         else:
             buttons.append([
-                InlineKeyboardButton(file_name, callback_data=f"{pre}#{file_id}", style=style)
+                InlineKeyboardButton(display_name, callback_data=f"{pre}#{file_id}", style=style)
             ])
 
     page = math.ceil(offset / 10) + 1
@@ -282,8 +284,9 @@ async def callback_router(client: Client, query: CallbackQuery):
         size = get_size(file.get('file_size') if isinstance(file, dict) else file.file_size)
 
         if settings.CUSTOM_FILE_CAPTION:
+            file_name_display = remove_file_extension(file.get('file_name') if isinstance(file, dict) else file.file_name or "")
             caption = settings.CUSTOM_FILE_CAPTION.format(
-                file_name=file.get('file_name') if isinstance(file, dict) else file.file_name or "",
+                file_name=file_name_display,
                 file_size=size,
                 file_caption=caption or "",
             )
@@ -395,9 +398,10 @@ async def auto_filter(client: Client, message, spoll=None):
         style = enums.ButtonStyle.PRIMARY if i % 2 == 0 else enums.ButtonStyle.DEFAULT
         file_id = file.get('_id') if isinstance(file, dict) else file.file_id
         file_name = file.get('file_name') if isinstance(file, dict) else file.file_name
+        display_name = remove_file_extension(file_name)  # Remove extension for display
         buttons.append([
             InlineKeyboardButton(
-                f"{file_name}",
+                f"{display_name}",
                 callback_data=f"{pre}#{file_id}",
                 style=style,
             )

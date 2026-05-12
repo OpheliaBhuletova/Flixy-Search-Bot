@@ -25,6 +25,18 @@ def get_size(size: int | float) -> str:
     return f"{size:.2f} {units[index]}"
 
 
+def remove_file_extension(filename: str) -> str:
+    """Remove file extension from filename.
+    
+    Examples:
+        "Movie.mkv" -> "Movie"
+        "Series S01E01.mp4" -> "Series S01E01"
+    """
+    if not filename:
+        return filename
+    return re.sub(r"\.[^.]+$", "", filename)
+
+
 def split_list(data: list, size: int):
     for i in range(0, len(data), size):
         yield data[i:i + size]

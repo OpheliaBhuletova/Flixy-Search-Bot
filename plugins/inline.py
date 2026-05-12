@@ -11,7 +11,7 @@ from pyrogram.errors.exceptions.bad_request_400 import QueryIdInvalid
 
 from bot.config import settings
 from bot.utils.cache import RuntimeCache
-from bot.utils.helpers import get_size
+from bot.utils.helpers import get_size, remove_file_extension
 from database.ia_filterdb import get_inline_search_results_with_fallback
 
 logger = logging.getLogger(__name__)
@@ -69,6 +69,7 @@ async def inline_query_handler(client: Client, query: InlineQuery):
 
     for file in files:
         title = file.get('file_name') if isinstance(file, dict) else file.file_name
+        title = remove_file_extension(title)  # Remove file extension from display
         size = get_size(file.get('file_size') if isinstance(file, dict) else file.file_size)
         caption = file.get('caption') if isinstance(file, dict) else file.caption
         file_id = file.get('_id') if isinstance(file, dict) else file.file_id
