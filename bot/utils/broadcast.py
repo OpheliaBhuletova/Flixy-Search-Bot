@@ -117,7 +117,7 @@ async def new_movie_broadcast(client: Client, title: str, message: Message = Non
         try:
             if message:
                 # Forward the original message from the channel
-                await message.forward(chat_id=uid)
+                await message.copy(chat_id=uid)
                 success += 1
             else:
                 # Fallback to sending text notification with search button
