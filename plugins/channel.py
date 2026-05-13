@@ -67,6 +67,15 @@ async def channel_media_handler(client: Client, message: Message):
     if saved:
         logger.info(f"✅ File saved successfully: {title}")
         
+        # Log to Telegram LOG_CHANNEL for tracking
+        if settings.LOG_CHANNEL and message.chat.id != WATCHLIST_NOTIFICATION_CHANNEL:
+            try:
+                db_type = "📌 MOVIES DB (moviesDB)" if message.chat.id in settings.MOVIES_CHANNELS else "💬 SERIES DB (seriesDB)" if message.chat.id in settings.SERIES_CHANNELS else "📦 DEFAULT DB"
+                log_msg = f"✅ <b>File Added</b>\n\n<b>DB:</b> {db_type}\n<b>Title:</b> <code>{title}</code>\n<b>File:</b> <code>{media.file_name}</code>\n<b>Size:</b> <code>{media.file_size / (1024*1024):.2f} MB</code>\n<b>Channel:</b> {message.chat.title}"
+                await client.send_message(settings.LOG_CHANNEL, log_msg, parse_mode=enums.ParseMode.HTML)
+            except Exception as e:
+                logger.warning(f"Failed to log to LOG_CHANNEL: {e}")
+        
         logger.info(f"🔔 Checking if title '{title}' is new...")
         is_new = await announce_title(title)
         logger.info(f"🔔 announce_title returned: {is_new}")

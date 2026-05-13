@@ -1,6 +1,8 @@
 from typing import List, Union, Optional
 from pydantic_settings import BaseSettings
 from pydantic import field_validator
+import ast
+import json
 
 
 TRUE_VALUES = {"true", "yes", "1", "enable", "y"}
@@ -128,6 +130,41 @@ class Settings(BaseSettings):
     @property
     def METADATA_ENABLED(self) -> bool:
         return bool(self.TMDB_API_KEY)
+    
+    @field_validator(
+        "ADMINS",
+        "CHANNELS", 
+        "MOVIES_CHANNELS",
+        "SERIES_CHANNELS",
+        "AD_CHANNEL",
+        "SUDO_USERS",
+        "FILE_STORE_CHANNEL",
+        mode="before",
+    )
+    @classmethod
+    def parse_list_fields(cls, v):
+        """Parse list fields from environment variables."""
+        if isinstance(v, list):
+            return v
+        if isinstance(v, str):
+            v = v.strip()
+            if not v:
+                return []
+            try:
+                # Try parsing as Python literal (handles lists, tuples, etc.)
+                parsed = ast.literal_eval(v)
+                if isinstance(parsed, (list, tuple)):
+                    return list(parsed)
+            except (ValueError, SyntaxError):
+                pass
+            try:
+                # Try parsing as JSON
+                parsed = json.loads(v)
+                if isinstance(parsed, list):
+                    return parsed
+            except json.JSONDecodeError:
+                pass
+        return v if isinstance(v, list) else []
     
     @field_validator(
         "P_TTI_SHOW_OFF",
