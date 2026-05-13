@@ -287,13 +287,13 @@ async def index_files_to_db(
         total_target = max(last_msg_id - RuntimeCache.index_skip, 0)
 
         # Bots cannot iterate history; we crawl backwards using message IDs instead
-        for i in range(0, total_target, 200):
+        for i in range(0, total_target, 150):
             if RuntimeCache.cancel_index:
                 break
             
             try:
                 # Generate a batch of IDs to fetch (descending)
-                batch_ids = [last_msg_id - j for j in range(i, min(i + 200, total_target))]
+                batch_ids = [last_msg_id - j for j in range(i, min(i + 150, total_target))]
                 messages = await client.get_messages(chat_id, batch_ids)
 
                 for msg in messages:
@@ -337,7 +337,10 @@ async def index_files_to_db(
                     else:
                         errors += 1
 
-                # Update progress after each batch of 200
+                # Add small delay after each batch to prevent rate limits
+                await asyncio.sleep(0.25)
+
+                # Update progress after each batch
                 elapsed = round(time.time() - start_time, 2)
                 processed = total + duplicate + deleted + no_media + unsupported + errors
                 speed = round(processed / elapsed, 2) if elapsed > 0 else 0
@@ -373,8 +376,9 @@ async def index_files_to_db(
                     pass
 
             except FloodWait as e:
-                logger.warning(f"FloodWait: Sleeping for {e.value}s")
-                await asyncio.sleep(e.value)
+                wait_time = e.value + 2  # Add buffer to e.value
+                logger.warning(f"FloodWait: Sleeping for {wait_time}s")
+                await asyncio.sleep(wait_time)
             except Exception as e:
                 logger.exception(f"Error during batch: {e}")
                 errors += 1
