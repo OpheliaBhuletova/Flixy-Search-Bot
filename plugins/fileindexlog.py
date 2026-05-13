@@ -37,10 +37,7 @@ async def recent_files_handler(client: Client, message: Message):
         # Fetch from MOVIES DB (Inline)
         if filter_type in ["movies", "both"]:
             try:
-                if settings.ENABLE_MULTI_DB:
-                    movies_collection = get_inline_collection()
-                else:
-                    movies_collection = get_db()[settings.COLLECTION_NAME]
+                movies_collection = get_inline_collection()
                 
                 movies = await movies_collection.find().sort("created_at", -1).limit(limit).to_list(length=limit)
                 
@@ -61,10 +58,7 @@ async def recent_files_handler(client: Client, message: Message):
         # Fetch from SERIES DB (PM)
         if filter_type in ["series", "both"]:
             try:
-                if settings.ENABLE_MULTI_DB:
-                    series_collection = get_pm_collection()
-                else:
-                    series_collection = get_db()[settings.COLLECTION_NAME]
+                series_collection = get_pm_collection()
                 
                 series = await series_collection.find().sort("created_at", -1).limit(limit).to_list(length=limit)
                 
@@ -112,10 +106,7 @@ async def database_stats_handler(client: Client, message: Message):
         
         # MOVIES DB Stats
         try:
-            if settings.ENABLE_MULTI_DB:
-                movies_collection = get_inline_collection()
-            else:
-                movies_collection = get_db()[settings.COLLECTION_NAME]
+            movies_collection = get_inline_collection()
             
             movies_count = await movies_collection.count_documents({})
             movies_size = await movies_collection.aggregate([
@@ -135,10 +126,7 @@ async def database_stats_handler(client: Client, message: Message):
         
         # SERIES DB Stats
         try:
-            if settings.ENABLE_MULTI_DB:
-                series_collection = get_pm_collection()
-            else:
-                series_collection = get_db()[settings.COLLECTION_NAME]
+            series_collection = get_pm_collection()
             
             series_count = await series_collection.count_documents({})
             series_size = await series_collection.aggregate([
@@ -159,8 +147,8 @@ async def database_stats_handler(client: Client, message: Message):
         # Configuration Info
         stats += f"⚙️ <b>Configuration</b>\n"
         stats += f"• Multi-DB Enabled: <code>{settings.ENABLE_MULTI_DB}</code>\n"
-        stats += f"• Movies Collection: <code>{settings.COLLECTION_NAME_INLINE}</code>\n"
-        stats += f"• Series Collection: <code>{settings.COLLECTION_NAME_PM}</code>"
+        stats += f"• Movies Collection: <code>Cluster0</code>\n"
+        stats += f"• Series Collection: <code>Cluster0</code>"
         
         await msg.edit(stats, parse_mode=enums.ParseMode.HTML)
         

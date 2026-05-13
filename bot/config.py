@@ -4,10 +4,8 @@ from pydantic import field_validator
 import ast
 import json
 
-
 TRUE_VALUES = {"true", "yes", "1", "enable", "y"}
 FALSE_VALUES = {"false", "no", "0", "disable", "n"}
-
 
 def parse_bool(value: str | bool, default: bool) -> bool:
     if isinstance(value, bool):
@@ -19,12 +17,10 @@ def parse_bool(value: str | bool, default: bool) -> bool:
         return False
     return default
 
-
 class Settings(BaseSettings):
-    # ─── Bot information ───────────────────────────────────────────────
+    # ─── Connection ────────────────────────────────────────────────────
     SESSION: str = "Flixy_Search_Bot"
     USER_SESSION: str = "User_Bot"
-
     API_ID: int
     API_HASH: str
     BOT_TOKEN: str
@@ -39,61 +35,29 @@ class Settings(BaseSettings):
 
     # ─── Admins, Channels & Users ──────────────────────────────────────
     ADMINS: List[Union[int, str]] = []
-    CHANNELS: List[Union[int, str]] = []  # Deprecated - kept for backward compatibility
-    MOVIES_CHANNELS: List[Union[int, str]] = []  # Movies save to inline DB (moviesDB)
-    SERIES_CHANNELS: List[Union[int, str]] = []  # Series save to PM DB (seriesDB)
-    # previously supported AUTH_USERS/AUTH_CHANNEL settings have been removed;
-    # sudo users now control private search access.  AUTH_GROUPS remains for
-    # future use.
+    CHANNELS: Optional[List[Union[int, str]]] = []  # Deprecated
+    MOVIES_CHANNELS: List[Union[int, str]] = []
+    SERIES_CHANNELS: List[Union[int, str]] = []
     AUTH_GROUPS: Optional[List[int]] = None
-
-    # Ad channels: send periodic promotional message to these channel IDs
     AD_CHANNEL: List[Union[int, str]] = []
-
-    # Updates channel: send published updates to this channel
     UPDATES_CHANNEL: Union[int, str] = 0
-
-    # sudo users (super-users) bypass certain restrictions such as
-    # subscription checks and bans; configured via environment.
     SUDO_USERS: List[Union[int, str]] = []
 
     # ─── Database ──────────────────────────────────────────────────────
-    # Original single-cluster configuration (used when ENABLE_MULTI_DB=False)
-    DATABASE_URL: str
-    DATABASE_NAME: str = "Telegram"
-    COLLECTION_NAME: str = "channel_files"
-
-    # ─── Multi-Cluster Mode (Phase 1-5) ──────────────────────────────
-    # Dual-cluster mode enables separation of inline and PM searches into
-    # different MongoDB Atlas projects/clusters. This allows for:
-    # - Separate free clusters for inline and PM (MongoDB Atlas limit)
-    # - Different indexing strategies per cluster
-    # - Targeted search results (inline from inline cluster, PM from PM cluster)
-    # - Gradual rollout and easy rollback to single-cluster mode
-    #
-    # When ENABLE_MULTI_DB is False (default):
-    #   - All searches use the single unified cluster (DATABASE_URL, DATABASE_NAME)
-    #   - Backward compatible with existing deployments
-    #   - Fallback functions automatically use single cluster
-    #
-    # When ENABLE_MULTI_DB is True:
-    #   - Inline searches use DATABASE_URL_INLINE + DATABASE_NAME_INLINE
-    #   - PM searches use DATABASE_URL_PM + DATABASE_NAME_PM
-    #   - Indexing prompts user to select target database
-    #   - Full dual-cluster separation with database routing
-    ENABLE_MULTI_DB: bool = False  # Toggle dual-cluster mode (default: False for backward compatibility)
+    # Dual-cluster mode separates inline and PM search data into different clusters.
+    ENABLE_MULTI_DB: bool = False
     
-    # Inline searches cluster (MongoDB Atlas Project 1)
-    DATABASE_URL_INLINE: Optional[str] = None  # MongoDB URL for inline cluster (fallback to DATABASE_URL if None)
-    DATABASE_NAME_INLINE: str = "Telegram_Inline"  # Database name in inline cluster
-    COLLECTION_NAME_INLINE: str = "channel_files"  # Collection in inline database
+    # Inline cluster
+    DATABASE_URL_INLINE: str
+    DATABASE_NAME_INLINE: str = "Telegram_Inline"
     
-    # PM searches cluster (MongoDB Atlas Project 2)
-    DATABASE_URL_PM: Optional[str] = None  # MongoDB URL for PM cluster (fallback to DATABASE_URL if None)
-    DATABASE_NAME_PM: str = "Telegram_PM"  # Database name in PM cluster
-    COLLECTION_NAME_PM: str = "channel_files"  # Collection in PM database
+    # PM cluster
+    DATABASE_URL_PM: str
+    DATABASE_NAME_PM: str = "Telegram_PM"
 
     # ─── Others ────────────────────────────────────────────────────────
+    USE_CAPTION_FILTER: bool = False
+    CACHE_TIME: int = 300
     LOG_CHANNEL: int = 0
     SUPPORT_CHAT: str = "TitanHelpDesk"
 
@@ -115,7 +79,6 @@ class Settings(BaseSettings):
     @property
     def METADATA_TEMPLATE(self) -> str:
         return self.IMDB_TEMPLATE
-    
     LONG_IMDB_DESCRIPTION: bool = False
     SPELL_CHECK_REPLY: bool = True
     MAX_LIST_ELM: Optional[int] = None
@@ -126,11 +89,10 @@ class Settings(BaseSettings):
     PROTECT_CONTENT: bool = False
     PUBLIC_FILE_STORE: bool = True
 
-    # ─── Boolean compatibility ─────────────────────────────────────────
     @property
     def METADATA_ENABLED(self) -> bool:
         return bool(self.TMDB_API_KEY)
-    
+
     @field_validator(
         "ADMINS",
         "CHANNELS", 
@@ -142,26 +104,22 @@ class Settings(BaseSettings):
         mode="before",
     )
     @classmethod
-    def parse_list_fields(cls, v):
-        """Parse list fields from environment variables."""
+    def parse_list_fields(cls, v) -> List:
         if isinstance(v, list):
             return v
         if isinstance(v, str):
             v = v.strip()
             if not v:
                 return []
+            if v.startswith("[") or v.startswith("("):
+                try:
+                    parsed = ast.literal_eval(v)
+                    return list(parsed) if isinstance(parsed, (list, tuple)) else []
+                except (ValueError, SyntaxError):
+                    pass
             try:
-                # Try parsing as Python literal (handles lists, tuples, etc.)
-                parsed = ast.literal_eval(v)
-                if isinstance(parsed, (list, tuple)):
-                    return list(parsed)
-            except (ValueError, SyntaxError):
-                pass
-            try:
-                # Try parsing as JSON
                 parsed = json.loads(v)
-                if isinstance(parsed, list):
-                    return parsed
+                return parsed if isinstance(parsed, list) else []
             except json.JSONDecodeError:
                 pass
         return v if isinstance(v, list) else []
@@ -179,17 +137,7 @@ class Settings(BaseSettings):
     )
     @classmethod
     def validate_bools(cls, v, info):
-        defaults = {
-            "P_TTI_SHOW_OFF": False,
-            "IMDB": False,
-            "SINGLE_BUTTON": True,
-            "LONG_IMDB_DESCRIPTION": False,
-            "SPELL_CHECK_REPLY": True,
-            "MELCOW_NEW_USERS": False,
-            "PROTECT_CONTENT": False,
-            "PUBLIC_FILE_STORE": True,
-        }
-        return parse_bool(v, defaults[info.field_name])
+        return parse_bool(v, False)
 
     class Config:
         env_file = ".env"
@@ -199,15 +147,11 @@ class Settings(BaseSettings):
 settings = Settings()
 
 def build_log_string() -> str:
-    log = "Current Customized Configurations:\n"
+    log = "Customized Configurations:\n"
     log += "TMDb metadata enabled\n" if settings.METADATA_ENABLED else "TMDb metadata disabled\n"
     log += "Spell check enabled\n" if settings.SPELL_CHECK_REPLY else "Spell check disabled\n"
-    log += (
-        f"MAX_LIST_ELM set to {settings.MAX_LIST_ELM}\n"
-        if settings.MAX_LIST_ELM
-        else "MAX_LIST_ELM not set\n"
-    )
+    if settings.MAX_LIST_ELM:
+        log += f"MAX_LIST_ELM: {settings.MAX_LIST_ELM}\n"
     return log
-
 
 LOG_STR = build_log_string()

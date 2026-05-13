@@ -92,12 +92,13 @@ async def channel_media_handler(client: Client, message: Message):
         else:
             # For other channels, broadcast to all users
             if is_new:
-                logger.info(f"🎬 Broadcasting new title: {title}")
-                try:
-                    await new_movie_broadcast(client, title, message)
-                    logger.info(f"✅ Broadcast completed for: {title}")
-                except Exception as e:
-                    logger.exception(f"❌ Error during broadcast for '{title}': {e}")
+                logger.info(f"🎬 New title '{title}' detected, but global broadcast is temporarily disabled.")
+                # try:
+                #     await new_movie_broadcast(client, title, message)
+                #     logger.info(f"✅ Broadcast completed for: {title}")
+                # except Exception as e:
+                #     logger.exception(f"❌ Error during broadcast for '{title}': {e}")
+                pass
             else:
                 logger.info(f"ℹ️  Title '{title}' was already announced, skipping broadcast")
     else:

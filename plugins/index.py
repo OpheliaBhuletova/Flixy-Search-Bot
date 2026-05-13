@@ -286,100 +286,117 @@ async def index_files_to_db(
         current = RuntimeCache.index_skip
         total_target = max(last_msg_id - RuntimeCache.index_skip, 0)
 
-        try:
-            async for msg in client.iter_messages(chat_id, last_msg_id, current):
-                if RuntimeCache.cancel_index:
-                    break
+        # Bots cannot iterate history; we crawl backwards using message IDs instead
+        for i in range(0, total_target, 200):
+            if RuntimeCache.cancel_index:
+                break
+            
+            try:
+                # Generate a batch of IDs to fetch (descending)
+                batch_ids = [last_msg_id - j for j in range(i, min(i + 200, total_target))]
+                messages = await client.get_messages(chat_id, batch_ids)
 
-                current += 1
+                for msg in messages:
+                    if RuntimeCache.cancel_index:
+                        break
 
-                if current % 20 == 0:
-                    elapsed = round(time.time() - start_time, 2)
-                    processed = total + duplicate + deleted + no_media + unsupported + errors
-                    speed = round(processed / elapsed, 2) if elapsed > 0 else 0
-                    progress_percent = round((current / total_target) * 100, 1) if total_target > 0 else 0
-                    progress_bar = build_progress_bar(current, total_target)
+                    current += 1
 
-                    remaining_items = max(total_target - current, 0)
-                    eta_seconds = round(remaining_items / speed, 2) if speed > 0 else 0
+                    if msg.empty:
+                        deleted += 1
+                        continue
 
-                    db_label = "📌 Inline DB" if db_type == "inline" else "💬 PM DB" if db_type == "pm" else "📦 Default DB"
-                    await status_msg.edit(
-                        f"📦 <b>Indexing in Progress</b> ({db_label})\n\n"
-                        f"<code>{progress_bar}</code> <b>{progress_percent}%</b>\n\n"
-                        "<b>Summary:</b>\n"
-                        f"• 📥 Fetched: <code>{current}</code> / <code>{total_target}</code>\n"
-                        f"• ✅ Saved: <code>{total}</code>\n"
-                        f"• ♻️ Duplicates: <code>{duplicate}</code>\n"
-                        f"• 🗑 Deleted: <code>{deleted}</code>\n"
-                        f"• 📄 Non-media: <code>{no_media + unsupported}</code>\n"
-                        f"• ⚠️ Errors: <code>{errors}</code>\n\n"
-                        f"⏱ <b>Time:</b> <code>{elapsed}s</code>\n"
-                        f"⚡ <b>Speed:</b> <code>{speed} files/sec</code>\n"
-                        f"🕒 <b>ETA:</b> <code>{format_eta(eta_seconds)}</code>",
-                        parse_mode=enums.ParseMode.HTML,
-                        reply_markup=InlineKeyboardMarkup(
-                            [[InlineKeyboardButton("Cancel", callback_data="index_cancel", style=enums.ButtonStyle.DANGER)]]
-                        ),
-                    )
+                    if not msg.media:
+                        no_media += 1
+                        continue
 
-                if msg.empty:
-                    deleted += 1
-                    continue
+                    if msg.media not in {
+                        enums.MessageMediaType.VIDEO,
+                        enums.MessageMediaType.AUDIO,
+                        enums.MessageMediaType.DOCUMENT,
+                    }:
+                        unsupported += 1
+                        continue
 
-                if not msg.media:
-                    no_media += 1
-                    continue
+                    media = getattr(msg, msg.media.value, None)
+                    if not media:
+                        unsupported += 1
+                        continue
 
-                if msg.media not in {
-                    enums.MessageMediaType.VIDEO,
-                    enums.MessageMediaType.AUDIO,
-                    enums.MessageMediaType.DOCUMENT,
-                }:
-                    unsupported += 1
-                    continue
+                    media.file_type = msg.media.value
+                    media.caption = msg.caption
 
-                media = getattr(msg, msg.media.value, None)
-                if not media:
-                    unsupported += 1
-                    continue
+                    saved, reason, title = await save_file(media, db_type=db_type)
 
-                media.file_type = msg.media.value
-                media.caption = msg.caption
+                    if saved:
+                        total += 1
+                        # Mark as announced regardless of DB to prevent future broadcast spam
+                        await announce_title(title)
+                    elif reason == 0:
+                        duplicate += 1
+                    else:
+                        errors += 1
 
-                saved, reason, title = await save_file(media, db_type=db_type)
+                # Update progress after each batch of 200
+                elapsed = round(time.time() - start_time, 2)
+                processed = total + duplicate + deleted + no_media + unsupported + errors
+                speed = round(processed / elapsed, 2) if elapsed > 0 else 0
+                progress_percent = round((current / total_target) * 100, 1) if total_target > 0 else 0
+                progress_bar = build_progress_bar(current, total_target)
 
-                if saved:
-                    total += 1
-                    if db_type == "default" and await announce_title(title):
-                        await new_movie_broadcast(client, title, msg)
-                elif reason == 0:
-                    duplicate += 1
-                else:
-                    errors += 1
+                remaining_items = max(total_target - current, 0)
+                eta_seconds = round(remaining_items / speed, 2) if speed > 0 else 0
 
-        except FloodWait as e:
-            await asyncio.sleep(e.x)
+                db_name = settings.DATABASE_NAME_INLINE if db_type == "inline" else settings.DATABASE_NAME_PM
+                db_label = "📌 Inline DB" if db_type == "inline" else "💬 PM DB" if db_type == "pm" else "📦 Default DB"
+                try:
+                    await status_msg.edit_text(
+                            f"📦 <b>Indexing in Progress</b> ({db_label})\n\n"
+                            f"<code>{progress_bar}</code> <b>{progress_percent}%</b>\n\n"
+                            "<b>Summary:</b>\n"
+                            f"• 🗄 Database: <code>{db_name}</code>\n"
+                            f"• 📥 Fetched: <code>{current}</code> / <code>{total_target}</code>\n"
+                            f"• ✅ Saved: <code>{total}</code>\n"
+                            f"• ♻️ Duplicates: <code>{duplicate}</code>\n"
+                            f"• 🗑 Deleted: <code>{deleted}</code>\n"
+                            f"• 📄 Non-media: <code>{no_media + unsupported}</code>\n"
+                            f"• ⚠️ Errors: <code>{errors}</code>\n\n"
+                            f"⏱ <b>Time:</b> <code>{elapsed}s</code>\n"
+                            f"⚡ <b>Speed:</b> <code>{speed} files/sec</code>\n"
+                            f"🕒 <b>ETA:</b> <code>{format_eta(eta_seconds)}</code>",
+                            parse_mode=enums.ParseMode.HTML,
+                            reply_markup=InlineKeyboardMarkup(
+                                [[InlineKeyboardButton("Cancel", callback_data="index_cancel", style=enums.ButtonStyle.DANGER)]]
+                            ),
+                        )
+                except Exception:
+                    pass
 
-        except Exception as e:
-            logger.exception(e)
-            await status_msg.edit(f"Error: {e}")
+            except FloodWait as e:
+                logger.warning(f"FloodWait: Sleeping for {e.value}s")
+                await asyncio.sleep(e.value)
+            except Exception as e:
+                logger.exception(f"Error during batch: {e}")
+                errors += 1
 
-        else:
-            time_taken = round(time.time() - start_time, 2)
-            processed_count = total + duplicate + deleted + no_media + unsupported + errors
-            final_speed = round(processed_count / time_taken, 2) if time_taken > 0 else 0
-
-            db_label = "📌 Inline DB" if db_type == "inline" else "💬 PM DB" if db_type == "pm" else "📦 Default DB"
-            await status_msg.edit(
-                f"✅ <b>Indexing Complete</b> ({db_label})\n\n"
-                "<b>Summary:</b>\n"
-                f"• ✅ Saved: <code>{total}</code>\n"
-                f"• ♻️ Duplicates: <code>{duplicate}</code>\n"
-                f"• 🗑 Deleted: <code>{deleted}</code>\n"
-                f"• 📄 Non-media: <code>{no_media + unsupported}</code>\n"
-                f"• ⚠️ Errors: <code>{errors}</code>\n\n"
-                f"⏱ <b>Time:</b> <code>{time_taken}s</code>\n"
-                f"⚡ <b>Speed:</b> <code>{final_speed} files/sec</code>",
-                parse_mode=enums.ParseMode.HTML,
-            )
+        # Final stats reporting
+        time_taken = round(time.time() - start_time, 2)
+        processed_count = total + duplicate + deleted + no_media + unsupported + errors
+        final_speed = round(processed_count / time_taken, 2) if time_taken > 0 else 0
+        db_name = settings.DATABASE_NAME_INLINE if db_type == "inline" else settings.DATABASE_NAME_PM
+        db_label = "📌 Inline DB" if db_type == "inline" else "💬 PM DB" if db_type == "pm" else "📦 Default DB"
+        status_header = "❌ <b>Indexing Cancelled</b>" if RuntimeCache.cancel_index else "✅ <b>Indexing Complete</b>"
+        
+        await status_msg.edit_text(
+            f"{status_header} ({db_label})\n\n"
+            "<b>Summary:</b>\n"
+            f"• 🗄 Database: <code>{db_name}</code>\n"
+            f"• ✅ Saved: <code>{total}</code>\n"
+            f"• ♻️ Duplicates: <code>{duplicate}</code>\n"
+            f"• 🗑 Deleted: <code>{deleted}</code>\n"
+            f"• 📄 Non-media: <code>{no_media + unsupported}</code>\n"
+            f"• ⚠️ Errors: <code>{errors}</code>\n\n"
+            f"⏱ <b>Time:</b> <code>{time_taken}s</code>\n"
+            f"⚡ <b>Speed:</b> <code>{final_speed} files/sec</code>",
+            parse_mode=enums.ParseMode.HTML,
+        )

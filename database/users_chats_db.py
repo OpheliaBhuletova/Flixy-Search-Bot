@@ -1,41 +1,20 @@
 import logging
 import motor.motor_asyncio
 from typing import List, Dict, Optional
- 
+
 from bot.config import settings
+
 logger = logging.getLogger(__name__)
-logger.setLevel(logging.INFO) # Changed to INFO for debugging
 
 class Database:
-    __version__ = "1.1" # Added for debugging purposes
-
     def __init__(self, uri, database_name):
-        logger.info(f"Initializing Database class version {self.__version__}") # Log version
         self._client = motor.motor_asyncio.AsyncIOMotorClient(uri)
         self.db = self._client[database_name]
         self.col = self.db.users
         self.grp = self.db.groups
 
-        # Do not create indexes or schedule async work at import time.
-        # Index creation will be performed explicitly from the running
-        # event loop by calling `ensure_indexes()`.
-
-    def _ensure_indexes(self):
-        try:
-            # Legacy synchronous helper kept for reference. Prefer
-            # using the async `ensure_indexes` method below.
-            self.col.create_index("id", unique=True)
-            self.col.create_index("ban_status.is_banned")
-
-            self.grp.create_index("id", unique=True)
-            self.grp.create_index("chat_status.is_disabled")
-        except Exception:
-            logger.exception("Failed creating MongoDB indexes")
-
     async def ensure_indexes(self):
-        """Asynchronously create necessary indexes. Call this from a running
-        asyncio event loop (for example during bot startup) so Motor's
-        coroutines are attached to the correct loop."""
+        """Asynchronously create necessary indexes for users and groups collections."""
         try:
             await self.col.create_index("id", unique=True)
             await self.col.create_index("ban_status.is_banned")
@@ -54,7 +33,7 @@ class Database:
                 "is_banned": False,
                 "ban_reason": "",
             },
-            "watchlist": [], # Initialize watchlist for new users
+            "watchlist": [],
         }
 
     async def add_user(self, id, name):
@@ -91,10 +70,10 @@ class Database:
         user = await self.col.find_one(
             {"id": int(user_id), "watchlist": {"$elemMatch": {"tmdb_id": tmdb_id, "media_type": media_type}}}
         )
-        
+
         if user:
             return False  # Already in watchlist
-        
+
         # Add to watchlist
         await self.col.update_one(
             {"id": int(user_id)},
@@ -135,7 +114,6 @@ class Database:
 
         banned_users = [u["id"] async for u in users]
         banned_chats = [c["id"] async for c in chats]
-
         return banned_users, banned_chats
 
     # ─── Group Helpers ───────────────────────────────────────────────────
@@ -258,12 +236,9 @@ def get_db_instance():
     global _db_instance
     if _db_instance is None:
         _db_instance = Database(
-            settings.DATABASE_URL,
-            settings.DATABASE_NAME
+            settings.DATABASE_URL_PM,
+            settings.DATABASE_NAME_PM
         )
     return _db_instance
 
-# Keep a module-level instance for backwards compatibility. It will be
-# created on import but won't run async index creation until explicitly
-# invoked from the event loop via `ensure_indexes()`.
 db = get_db_instance()

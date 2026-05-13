@@ -15,6 +15,7 @@ from bot.utils.messages import Texts
 from bot.utils.cache import RuntimeCache
 from bot.utils.helpers import get_file_id
 from bot.services.metadata_service import get_imdb_info, search_tmdb_titles
+from database.ia_filterdb import delete_file_by_id, unpack_new_file_id
 
 from database.users_chats_db import db
 
@@ -274,6 +275,46 @@ async def delete_all_images_command(client: Client, message: Message):
     except Exception as e:
         logger.exception(e)
         await message.reply(f"❌ Error deleting images: {e}")
+
+
+@Client.on_message(filters.command("deletefile") & filters.user(settings.ADMINS))
+async def delete_file_handler(client: Client, message: Message):
+    """Delete a specific file from the media database (admin only).
+    
+    Usage: 
+    1. Reply to a file with /deletefile [inline|pm]
+    2. /deletefile <file_id> [inline|pm]
+    """
+    file_id = None
+    db_type = "default"
+    
+    if message.reply_to_message:
+        media = get_file_id(message.reply_to_message)
+        if media:
+            file_id, _ = unpack_new_file_id(media.file_id)
+        
+        if len(message.command) > 1:
+            db_type = message.command[1].lower()
+    else:
+        if len(message.command) < 2:
+            return await message.reply(
+                "❌ <b>Usage:</b>\n"
+                "1. Reply to a media file with <code>/deletefile</code>\n"
+                "2. <code>/deletefile [file_id] [db_type]</code>",
+                parse_mode=enums.ParseMode.HTML
+            )
+        file_id = message.command[1]
+        if len(message.command) > 2:
+            db_type = message.command[2].lower()
+
+    if not file_id:
+        return await message.reply("❌ Could not identify a valid file to delete.")
+
+    success = await delete_file_by_id(file_id, db_type)
+    if success:
+        await message.reply(f"✅ File successfully removed from <b>{db_type}</b> database.")
+    else:
+        await message.reply(f"❌ File not found in <b>{db_type}</b> database.")
 
 
 async def send_text_start(message: Message, buttons):
