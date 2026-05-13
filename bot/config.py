@@ -37,7 +37,9 @@ class Settings(BaseSettings):
 
     # ─── Admins, Channels & Users ──────────────────────────────────────
     ADMINS: List[Union[int, str]] = []
-    CHANNELS: List[Union[int, str]] = []
+    CHANNELS: List[Union[int, str]] = []  # Deprecated - kept for backward compatibility
+    MOVIES_CHANNELS: List[Union[int, str]] = []  # Movies save to inline DB (moviesDB)
+    SERIES_CHANNELS: List[Union[int, str]] = []  # Series save to PM DB (seriesDB)
     # previously supported AUTH_USERS/AUTH_CHANNEL settings have been removed;
     # sudo users now control private search access.  AUTH_GROUPS remains for
     # future use.

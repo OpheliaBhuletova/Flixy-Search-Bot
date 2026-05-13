@@ -4,7 +4,7 @@ import logging
 from pyrogram.types import Message
 
 from bot.config import settings
-from database.ia_filterdb import save_file, announce_title
+from database.ia_filterdb import save_file, save_file_inline, save_file_pm, announce_title
 from database.users_chats_db import db
 from bot.services.metadata_service import search_tmdb_titles
 from bot.utils.helpers import extract_series_name_from_file
@@ -17,11 +17,18 @@ MEDIA_FILTER = filters.document | filters.video | filters.audio
 WATCHLIST_NOTIFICATION_CHANNEL = -1003707238605
 
 
-@Client.on_message((filters.chat(settings.CHANNELS) | filters.chat(WATCHLIST_NOTIFICATION_CHANNEL)) & MEDIA_FILTER)
+@Client.on_message(
+    (
+        filters.chat(settings.MOVIES_CHANNELS) |
+        filters.chat(settings.SERIES_CHANNELS) |
+        filters.chat(settings.CHANNELS) |
+        filters.chat(WATCHLIST_NOTIFICATION_CHANNEL)
+    ) & MEDIA_FILTER
+)
 async def channel_media_handler(client: Client, message: Message):
     """
     Handles media messages from configured channels
-    and saves them into the database.
+    and saves them into the appropriate database.
     Also notifies users who have added the series to their watchlist.
     """
     logger.info(f"📥 Media handler triggered for channel: {message.chat.id} ({message.chat.title})")
@@ -44,8 +51,17 @@ async def channel_media_handler(client: Client, message: Message):
     media.file_type = file_type
     media.caption = message.caption
 
-    logger.info(f"💾 Attempting to save file: {media.file_name}")
-    saved, reason, title = await save_file(media)
+    # Determine which database to save to based on channel type
+    if message.chat.id in settings.MOVIES_CHANNELS:
+        logger.info(f"💾 Saving to MOVIES DB (inline/moviesDB): {media.file_name}")
+        saved, reason, title = await save_file_inline(media)
+    elif message.chat.id in settings.SERIES_CHANNELS:
+        logger.info(f"💾 Saving to SERIES DB (PM/seriesDB): {media.file_name}")
+        saved, reason, title = await save_file_pm(media)
+    else:
+        logger.info(f"💾 Saving to DEFAULT DB: {media.file_name}")
+        saved, reason, title = await save_file(media)
+    
     logger.info(f"💾 Save result - Saved: {saved}, Reason: {reason}, Title: {title}")
     
     if saved:
