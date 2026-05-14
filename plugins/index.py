@@ -104,7 +104,7 @@ async def index_callback_handler(client: Client, query: CallbackQuery):
         )
     
     # Ask for database selection
-    if settings.ENABLE_MULTI_DB:
+    if True:  # Hardcoded: Multi-DB enabled
         await query.answer()
         db_buttons = [
             [

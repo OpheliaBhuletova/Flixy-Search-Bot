@@ -422,7 +422,7 @@ async def get_inline_search_results_with_fallback(
     Returns:
         (files, next_offset, total_results)
     """
-    if settings.ENABLE_MULTI_DB:
+    if True:  # Hardcoded: Multi-DB enabled
         return await get_inline_search_results(query, file_type, max_results, offset, filter)
     else:
         return await get_search_results(query, file_type, max_results, offset, filter)
@@ -443,7 +443,7 @@ async def get_pm_search_results_with_fallback(
     Returns:
         (files, next_offset, total_results)
     """
-    if settings.ENABLE_MULTI_DB:
+    if True:  # Hardcoded: Multi-DB enabled
         return await get_pm_search_results(query, file_type, max_results, offset, filter)
     else:
         return await _generic_search(query, get_collection("default"), file_type, max_results, offset, filter)

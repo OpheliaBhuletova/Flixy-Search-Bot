@@ -7,7 +7,7 @@ from bot.config import settings
 from database.ia_filterdb import save_file, save_file_inline, save_file_pm, announce_title
 from database.users_chats_db import db
 from bot.services.metadata_service import search_tmdb_titles
-from bot.utils.helpers import extract_series_name_from_file
+from bot.utils.helpers import extract_series_name_from_file, schedule_delete_message
 from bot.utils.broadcast import new_movie_broadcast
 
 logger = logging.getLogger(__name__)
@@ -72,7 +72,8 @@ async def channel_media_handler(client: Client, message: Message):
             try:
                 db_type = "📌 MOVIES DB (moviesDB)" if message.chat.id in settings.MOVIES_CHANNELS else "💬 SERIES DB (seriesDB)" if message.chat.id in settings.SERIES_CHANNELS else "📦 DEFAULT DB"
                 log_msg = f"✅ <b>File Added</b>\n\n<b>DB:</b> {db_type}\n<b>Title:</b> <code>{title}</code>\n<b>File:</b> <code>{media.file_name}</code>\n<b>Size:</b> <code>{media.file_size / (1024*1024):.2f} MB</code>\n<b>Channel:</b> {message.chat.title}"
-                await client.send_message(settings.LOG_CHANNEL, log_msg, parse_mode=enums.ParseMode.HTML)
+                sent_log = await client.send_message(settings.LOG_CHANNEL, log_msg, parse_mode=enums.ParseMode.HTML)
+                schedule_delete_message(client, sent_log.chat.id, sent_log.id, delay_seconds=3600)
             except Exception as e:
                 logger.warning(f"Failed to log to LOG_CHANNEL: {e}")
         

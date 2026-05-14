@@ -146,7 +146,7 @@ async def database_stats_handler(client: Client, message: Message):
         
         # Configuration Info
         stats += f"⚙️ <b>Configuration</b>\n"
-        stats += f"• Multi-DB Enabled: <code>{settings.ENABLE_MULTI_DB}</code>\n"
+        stats += "• Multi-DB Enabled: <code>True</code>\n"
         stats += f"• Movies Collection: <code>Cluster0</code>\n"
         stats += f"• Series Collection: <code>Cluster0</code>"
         

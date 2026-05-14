@@ -1,4 +1,5 @@
 import logging
+from datetime import datetime, timezone
 
 from pyrogram import Client, enums
 from pyrogram.types import (
@@ -48,6 +49,8 @@ async def inline_query_handler(client: Client, query: InlineQuery):
         keyword = query_text
         file_type = None
 
+    now_date = datetime.now(timezone.utc).date()
+
     reply_markup = InlineKeyboardMarkup(
         [[
             InlineKeyboardButton(
@@ -74,6 +77,9 @@ async def inline_query_handler(client: Client, query: InlineQuery):
         caption = file.get('caption') if isinstance(file, dict) else file.caption
         file_id = file.get('_id') if isinstance(file, dict) else file.file_id
 
+        created_at = file.get('created_at') if isinstance(file, dict) else getattr(file, "created_at", None)
+        is_new_today = created_at.date() == now_date if created_at else False
+
         if settings.CUSTOM_FILE_CAPTION:
             try:
                 caption = settings.CUSTOM_FILE_CAPTION.format(
@@ -87,12 +93,13 @@ async def inline_query_handler(client: Client, query: InlineQuery):
         if not caption:
             caption = title
 
+        description = f"Size: {size}\nType: {file.get('file_type') if isinstance(file, dict) else file.file_type}"
         results.append(
             InlineQueryResultCachedDocument(
                 title=title,
                 document_file_id=file_id,
                 caption=caption,
-                description=f"Size: {size}\nType: {file.get('file_type') if isinstance(file, dict) else file.file_type}",
+                description=f"✨ Recently Added\n{description}" if is_new_today else description,
                 reply_markup=reply_markup,
             )
         )
