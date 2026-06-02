@@ -466,12 +466,30 @@ def unpack_new_file_id(new_file_id: str) -> Tuple[str, str]:
 
 async def delete_file_by_id(file_id: str, db_type: str = "default") -> bool:
     """
-    Delete a media document from the specified collection.
+    Delete a media document from the specified collection and its announcement entry.
     
     Args:
         file_id: The database _id (unpacked file ID)
         db_type: "default", "inline", or "pm"
     """
-    collection = get_collection(db_type)
-    result = await collection.delete_one({"_id": file_id})
-    return result.deleted_count > 0
+    try:
+        collection = get_collection(db_type)
+        
+        # First, retrieve the document to get the file_name for announcement cleanup
+        doc = await collection.find_one({"_id": file_id})
+        if doc:
+            # Get the normalized title for removal from announced_titles
+            file_name = doc.get("file_name", "")
+            if file_name:
+                normalized_title = _announcement_key(file_name)
+                if normalized_title:
+                    # Remove from announced_titles so it can be re-announced if re-uploaded
+                    await get_db().announced_titles.delete_one({"_id": normalized_title})
+                    logger.info(f"Removed announcement entry for: {normalized_title}")
+        
+        # Delete the media document
+        result = await collection.delete_one({"_id": file_id})
+        return result.deleted_count > 0
+    except Exception as e:
+        logger.exception(f"Error deleting file {file_id} from {db_type}: {e}")
+        return False
