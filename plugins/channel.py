@@ -116,8 +116,8 @@ async def _notify_watchlist_users(client: Client, message: Message, media):
     
     logger.debug(f"   Extracted name attempt 1: {series_name}")
     
-    if not series_name or len(series_name.split()) == 1:
-        logger.debug("Could not extract proper series name from media")
+    if not series_name or len(series_name.strip()) < 2:
+        logger.warning(f"⚠️  Could not extract proper series name from media - extracted: '{series_name}'")
         return
     
     logger.info(f"📺 Extracted series name: {series_name}")

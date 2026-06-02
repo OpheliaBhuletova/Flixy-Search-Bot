@@ -464,32 +464,43 @@ def unpack_new_file_id(new_file_id: str) -> Tuple[str, str]:
     file_ref = encode_file_ref(decoded.file_reference)
     return file_id, file_ref
 
-async def delete_file_by_id(file_id: str, db_type: str = "default") -> bool:
+async def delete_file_by_id(file_id: str, db_type: str = "default"):
     """
     Delete a media document from the specified collection and its announcement entry.
     
     Args:
         file_id: The database _id (unpacked file ID)
         db_type: "default", "inline", or "pm"
+    
+    Returns:
+        (True, file_name) if deletion successful
+        (False, None) if file not found or error occurred
     """
     try:
         collection = get_collection(db_type)
+        file_name = None
         
         # First, retrieve the document to get the file_name for announcement cleanup
         doc = await collection.find_one({"_id": file_id})
         if doc:
-            # Get the normalized title for removal from announced_titles
             file_name = doc.get("file_name", "")
+            # Get the normalized title for removal from announced_titles
             if file_name:
                 normalized_title = _announcement_key(file_name)
                 if normalized_title:
                     # Remove from announced_titles so it can be re-announced if re-uploaded
-                    await get_db().announced_titles.delete_one({"_id": normalized_title})
-                    logger.info(f"Removed announcement entry for: {normalized_title}")
+                    delete_result = await get_db().announced_titles.delete_one({"_id": normalized_title})
+                    if delete_result.deleted_count > 0:
+                        logger.info(f"🗑️  Removed announcement entry: {normalized_title}")
         
         # Delete the media document
         result = await collection.delete_one({"_id": file_id})
-        return result.deleted_count > 0
+        if result.deleted_count > 0:
+            logger.info(f"🗑️  Deleted from {db_type} collection: {file_name or file_id}")
+            return True, file_name or file_id
+        else:
+            logger.warning(f"⚠️  File not found for deletion: {file_id} in {db_type}")
+            return False, None
     except Exception as e:
-        logger.exception(f"Error deleting file {file_id} from {db_type}: {e}")
-        return False
+        logger.exception(f"❌ Error deleting file {file_id} from {db_type}: {e}")
+        return False, None

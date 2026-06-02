@@ -310,10 +310,14 @@ async def delete_file_handler(client: Client, message: Message):
     if not file_id:
         return await message.reply("❌ Could not identify a valid file to delete.")
 
-    success = await delete_file_by_id(file_id, db_type)
+    logger.info(f"🗑️  Attempting to delete file: {file_id} from {db_type} database")
+    success, deleted_file_name = await delete_file_by_id(file_id, db_type)
+    
     if success:
-        await message.reply(f"✅ File successfully removed from <b>{db_type}</b> database.")
+        logger.info(f"✅ File deleted successfully: {deleted_file_name} (ID: {file_id}) from {db_type} database")
+        await message.reply(f"✅ File successfully removed from <b>{db_type}</b> database.\n\n📄 <code>{deleted_file_name}</code>")
     else:
+        logger.warning(f"❌ File not found: {file_id} in {db_type} database")
         await message.reply(f"❌ File not found in <b>{db_type}</b> database.")
 
 
