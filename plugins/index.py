@@ -323,6 +323,11 @@ async def index_files_to_db(
                         unsupported += 1
                         continue
 
+                    # Skip .txt files
+                    if hasattr(media, 'file_name') and media.file_name and media.file_name.endswith('.txt'):
+                        unsupported += 1
+                        continue
+
                     media.file_type = msg.media.value
                     media.caption = msg.caption
 
