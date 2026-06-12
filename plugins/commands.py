@@ -303,7 +303,13 @@ async def delete_file_handler(client: Client, message: Message):
                 "2. <code>/deletefile [file_id] [db_type]</code>",
                 parse_mode=enums.ParseMode.HTML
             )
-        file_id = message.command[1]
+        # The file_id from command might be in Telegram format, try to unpack it
+        try:
+            file_id, _ = unpack_new_file_id(message.command[1])
+        except Exception:
+            # If unpacking fails, use it as-is (already unpacked format)
+            file_id = message.command[1]
+        
         if len(message.command) > 2:
             db_type = message.command[2].lower()
 
