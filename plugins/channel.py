@@ -48,6 +48,11 @@ async def channel_media_handler(client: Client, message: Message):
 
     logger.info(f"📎 Found media type: {file_type}, File name: {media.file_name}")
     
+    # Skip .txt files
+    if media.file_name and media.file_name.endswith('.txt'):
+        logger.info(f"⏭️ Skipping .txt file: {media.file_name}")
+        return
+    
     media.file_type = file_type
     media.caption = message.caption
 

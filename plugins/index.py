@@ -325,6 +325,7 @@ async def index_files_to_db(
 
                     # Skip .txt files
                     if hasattr(media, 'file_name') and media.file_name and media.file_name.endswith('.txt'):
+                        logger.info(f"⏭️ Skipping .txt file during indexing: {media.file_name}")
                         unsupported += 1
                         continue
 

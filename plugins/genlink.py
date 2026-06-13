@@ -48,6 +48,7 @@ async def generate_link_handler(client: Client, message: Message):
     
     # Skip .txt files
     if hasattr(media, 'file_name') and media.file_name and media.file_name.endswith('.txt'):
+        logger.warning(f"⏭️ Link generation attempted for .txt file: {media.file_name}")
         return await message.reply("Cannot generate links for .txt files.")
 
     file_id, _ = unpack_new_file_id(media.file_id)
