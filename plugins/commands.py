@@ -7,13 +7,14 @@ import aiohttp
 
 from pyrogram import Client, filters, enums
 from pyrogram.types import CallbackQuery
-from pyrogram.types import InlineKeyboardButton, InlineKeyboardMarkup, Message
+from pyrogram.types import InlineKeyboardButton, InlineKeyboardMarkup, ReplyKeyboardMarkup, KeyboardButton, Message
 from pyrogram.errors import PeerIdInvalid, MessageNotModified, QueryIdInvalid
 
 from bot.config import settings
 from bot.utils.messages import Texts
 from bot.utils.cache import RuntimeCache
 from bot.utils.helpers import get_file_id
+from bot.utils.ott_calendar import OTT_RELEASE_CALENDAR
 from bot.services.metadata_service import get_imdb_info, search_tmdb_titles
 from database.ia_filterdb import delete_file_by_id, unpack_new_file_id
 
@@ -57,6 +58,45 @@ def extract_tg_post_id_from_message(message: Message) -> int | None:
 
 
 BATCH_FILES: dict = {}
+
+MONTH_BUTTONS = [
+    ["Jan", "Feb", "Mar", "Apr"],
+    ["May", "Jun", "Jul"],
+]
+
+MONTH_BUTTON_LABELS = [month for row in MONTH_BUTTONS for month in row]
+
+
+def build_month_keyboard():
+    buttons = []
+    for row in MONTH_BUTTONS:
+        buttons.append([
+            InlineKeyboardButton(month, callback_data=f"month:{month}") for month in row
+        ])
+    return InlineKeyboardMarkup(buttons)
+
+
+def build_month_reply_keyboard():
+    buttons = [[KeyboardButton(month) for month in row] for row in MONTH_BUTTONS]
+    return ReplyKeyboardMarkup(buttons, resize_keyboard=True, one_time_keyboard=False)
+
+
+def build_start_keyboard():
+    buttons = [
+        [
+            InlineKeyboardButton("🔍 Search", switch_inline_query_current_chat="", style=enums.ButtonStyle.SUCCESS),
+            InlineKeyboardButton("👀 Watchlist", callback_data="mywatchlist_start", style=enums.ButtonStyle.PRIMARY),
+        ],
+        [
+            InlineKeyboardButton("ℹ️ About", callback_data="about", style=enums.ButtonStyle.PRIMARY),
+            InlineKeyboardButton("📖 Help", callback_data="help", style=enums.ButtonStyle.DANGER),
+        ],
+    ]
+    return InlineKeyboardMarkup(buttons)
+
+
+def is_month_button(_, __, message: Message):
+    return False
 
 
 # ─── Link parsing helpers ────────────────────────────────────────────────
@@ -327,15 +367,18 @@ async def delete_file_handler(client: Client, message: Message):
         await message.reply(f"❌ File not found in <b>{db_type}</b> database.")
 
 
-async def send_text_start(message: Message, buttons):
+async def send_text_start(message: Message):
     await message.reply_text(
         Texts.START_TXT.format(
             message.from_user.mention,
             RuntimeCache.bot_username,
         ),
-        reply_markup=InlineKeyboardMarkup(buttons),
+        reply_markup=build_start_keyboard(),
         parse_mode=enums.ParseMode.HTML,
         disable_web_page_preview=True,
+    )
+    await message.reply_text(
+            "Pick a month to explore upcoming releases:",
     )
 
 
@@ -920,7 +963,23 @@ async def watchlist_remove_callback_handler(client: Client, callback: CallbackQu
             await callback.answer(f"Failed to remove '{series_title}' from your watchlist.", show_alert=True)
         except QueryIdInvalid:
             pass
-@Client.on_message(filters.command("start") & filters.incoming)
+@Client.on_callback_query(filters.regex(r"^month:"))
+async def month_button_handler(client: Client, callback_query: CallbackQuery):
+    month_name = callback_query.data.split(":", 1)[1]
+    calendar_text = OTT_RELEASE_CALENDAR.get(month_name, f"No OTT release data found for {month_name} yet.")
+    await callback_query.answer()
+    await callback_query.message.reply(calendar_text, parse_mode=enums.ParseMode.HTML)
+
+
+@Client.on_message(filters.private & filters.text & ~filters.regex(r"^/"))
+async def month_reply_handler(client: Client, message: Message):
+    if message.text not in MONTH_BUTTON_LABELS:
+        return
+    calendar_text = OTT_RELEASE_CALENDAR.get(message.text, f"No OTT release data found for {message.text} yet.")
+    await message.reply(calendar_text, parse_mode=enums.ParseMode.HTML)
+
+
+@Client.on_message(filters.command("start"))
 async def start_handler(client: Client, message: Message):
     # ── GROUP START ──
     if message.chat.type in {enums.ChatType.GROUP, enums.ChatType.SUPERGROUP}:
@@ -1006,16 +1065,7 @@ async def start_handler(client: Client, message: Message):
         logger.exception("User registration check failed during /start")
 
     if len(message.command) != 2:
-        buttons = [
-            [
-                InlineKeyboardButton("🔍 Search", switch_inline_query_current_chat="", style=enums.ButtonStyle.SUCCESS),
-                InlineKeyboardButton("👀 Watchlist", callback_data="mywatchlist_start", style=enums.ButtonStyle.PRIMARY),
-            ],
-            [
-                InlineKeyboardButton("ℹ️ About", callback_data="about", style=enums.ButtonStyle.PRIMARY),
-                InlineKeyboardButton("📖 Help", callback_data="help", style=enums.ButtonStyle.DANGER),
-            ],
-        ]
+        buttons = build_start_keyboard()
 
         startup_images = []
         try:
@@ -1030,7 +1080,7 @@ async def start_handler(client: Client, message: Message):
             startup_images = []
 
         if not startup_images:
-            return await send_text_start(message, buttons)
+            return await send_text_start(message)
 
         pic_to_use = random.choice(startup_images)
         logger.info(f"Selected startup image: {pic_to_use[:50]}...")
@@ -1042,12 +1092,16 @@ async def start_handler(client: Client, message: Message):
                     message.from_user.mention,
                     RuntimeCache.bot_username,
                 ),
-                reply_markup=InlineKeyboardMarkup(buttons),
+                reply_markup=buttons,
                 parse_mode=enums.ParseMode.HTML,
+            )
+            await message.reply_text(
+                "Pick a month to explore upcoming releases:",
+                reply_markup=build_month_reply_keyboard(),
             )
         except Exception:
             logger.exception("Failed to send startup image, sending text-only start")
-            await send_text_start(message, buttons)
+            await send_text_start(message)
 
         return
 
