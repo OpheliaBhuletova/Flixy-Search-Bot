@@ -262,14 +262,14 @@ async def next_page(client: Client, query: CallbackQuery):
     nav = []
     if offset > 0:
         nav.append(
-            InlineKeyboardButton("⏪ BACK", callback_data=f"next_{req}_{key}_{offset-10}", style=enums.ButtonStyle.DEFAULT)
+            InlineKeyboardButton("⏪ BACK", callback_data=f"next_{req}_{key}_{offset-10}", style=enums.ButtonStyle.PRIMARY)
         )
     nav.append(
         InlineKeyboardButton(f"📃 {page}/{total_pages}", callback_data="pages", style=enums.ButtonStyle.DEFAULT)
     )
     if next_offset:
         nav.append(
-            InlineKeyboardButton("NEXT ⏩", callback_data=f"next_{req}_{key}_{next_offset}", style=enums.ButtonStyle.DEFAULT)
+            InlineKeyboardButton("NEXT ⏩", callback_data=f"next_{req}_{key}_{next_offset}", style=enums.ButtonStyle.SUCCESS)
         )
 
     buttons.append(nav)
@@ -433,7 +433,7 @@ async def auto_filter(client: Client, message, spoll=None):
             InlineKeyboardButton(
                 "NEXT ⏩",
                 callback_data=f"next_{message.from_user.id}_{key}_{offset}",
-                style=enums.ButtonStyle.DEFAULT,
+                style=enums.ButtonStyle.SUCCESS,
             ),
         ])
 

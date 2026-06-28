@@ -694,7 +694,7 @@ async def _get_watchlist_message_and_buttons(user_id: int):
         text = "Your watchlist is empty. Use /addwatchlist to add TV series."
         buttons = [[
             InlineKeyboardButton("◀️ BACK", callback_data="start", style=enums.ButtonStyle.PRIMARY),
-            InlineKeyboardButton("🔐 CLOSE", callback_data="close_data", style=enums.ButtonStyle.DEFAULT)
+            InlineKeyboardButton("🔐 CLOSE", callback_data="close_data", style=enums.ButtonStyle.DANGER)
         ]]
         return text, buttons
 
@@ -750,7 +750,7 @@ async def _get_watchlist_message_and_buttons(user_id: int):
     
     buttons.append([
         InlineKeyboardButton("◀️ Back", callback_data="start", style=enums.ButtonStyle.PRIMARY),
-        InlineKeyboardButton("🔐 Close", callback_data="close_data", style=enums.ButtonStyle.DEFAULT)
+        InlineKeyboardButton("🔐 Close", callback_data="close_data", style=enums.ButtonStyle.DANGER)
     ])
     return text, buttons
 
