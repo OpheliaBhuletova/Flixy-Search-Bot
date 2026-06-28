@@ -6,13 +6,16 @@ import html
 import aiohttp
 
 from pyrogram import Client, filters, enums
+from pyrogram.types import CallbackQuery
 from pyrogram.types import InlineKeyboardButton, InlineKeyboardMarkup, Message
-from pyrogram.errors import PeerIdInvalid
+from pyrogram.errors import PeerIdInvalid, MessageNotModified, QueryIdInvalid
 
 from bot.config import settings
 from bot.utils.messages import Texts
 from bot.utils.cache import RuntimeCache
 from bot.utils.helpers import get_file_id
+from bot.services.metadata_service import get_imdb_info, search_tmdb_titles
+from database.ia_filterdb import delete_file_by_id, unpack_new_file_id
 
 from database.users_chats_db import db
 from database.ia_filterdb import delete_file as db_delete_file, unpack_new_file_id
@@ -308,6 +311,56 @@ async def delete_all_images_command(client: Client, message: Message):
     except Exception as e:
         logger.exception(e)
         await message.reply(f"❌ Error deleting images: {e}")
+
+
+@Client.on_message(filters.command("deletefile") & filters.user(settings.ADMINS))
+async def delete_file_handler(client: Client, message: Message):
+    """Delete a specific file from the media database (admin only).
+    
+    Usage: 
+    1. Reply to a file with /deletefile [inline|pm]
+    2. /deletefile <file_id> [inline|pm]
+    """
+    file_id = None
+    db_type = "default"
+    
+    if message.reply_to_message:
+        media = get_file_id(message.reply_to_message)
+        if media:
+            file_id, _ = unpack_new_file_id(media.file_id)
+        
+        if len(message.command) > 1:
+            db_type = message.command[1].lower()
+    else:
+        if len(message.command) < 2:
+            return await message.reply(
+                "❌ <b>Usage:</b>\n"
+                "1. Reply to a media file with <code>/deletefile</code>\n"
+                "2. <code>/deletefile [file_id] [db_type]</code>",
+                parse_mode=enums.ParseMode.HTML
+            )
+        # The file_id from command might be in Telegram format, try to unpack it
+        try:
+            file_id, _ = unpack_new_file_id(message.command[1])
+        except Exception:
+            # If unpacking fails, use it as-is (already unpacked format)
+            file_id = message.command[1]
+        
+        if len(message.command) > 2:
+            db_type = message.command[2].lower()
+
+    if not file_id:
+        return await message.reply("❌ Could not identify a valid file to delete.")
+
+    logger.info(f"🗑️  Attempting to delete file: {file_id} from {db_type} database")
+    success, deleted_file_name = await delete_file_by_id(file_id, db_type)
+    
+    if success:
+        logger.info(f"✅ File deleted successfully: {deleted_file_name} (ID: {file_id}) from {db_type} database")
+        await message.reply(f"✅ File successfully removed from <b>{db_type}</b> database.\n\n📄 <code>{deleted_file_name}</code>")
+    else:
+        logger.warning(f"❌ File not found: {file_id} in {db_type} database")
+        await message.reply(f"❌ File not found in <b>{db_type}</b> database.")
 
 
 async def send_text_start(message: Message, buttons):
@@ -621,12 +674,294 @@ async def emoji_reaction_handler(client: Client, query):
         logger.exception("Failed to answer emoji reaction callback")
 
 
+async def _get_watchlist_message_and_buttons(user_id: int):
+    """Helper function to generate watchlist message and buttons."""
+    watchlist = await db.get_watchlist(user_id)
+    
+    if not watchlist:
+        text = "Your watchlist is empty. Use /addwatchlist to add TV series."
+        buttons = [[
+            InlineKeyboardButton("◀️ BACK", callback_data="start", style=enums.ButtonStyle.PRIMARY),
+            InlineKeyboardButton("🔐 CLOSE", callback_data="close_data", style=enums.ButtonStyle.DEFAULT)
+        ]]
+        return text, buttons
+
+    text = "📺 YOUR WATCHLIST\n────────────────\n\n"
+    series_buttons = []
+    for item in watchlist:
+        tmdb_id = item['tmdb_id']
+        media_type = item['media_type']
+        
+        # Fetch details for display
+        series_info = await get_imdb_info(f"{media_type} {tmdb_id}", id=True)
+        if series_info:
+            title = series_info.get("title", f"Series ID: {tmdb_id}")
+            year = series_info.get("year", "")
+            rating = series_info.get("rating", "N/A")
+            
+            genres_raw = series_info.get("genres_line", "N/A")
+            genres = []
+            if genres_raw != "N/A":
+                # Splitting logic to extract genres without emojis and hashtags
+                # e.g., "🧟 #Horror 🕵️‍♂️ #Mystery" -> ["Horror", "Mystery"]
+                parts = genres_raw.split(" ")
+                for part in parts:
+                    if "#" in part:
+                        genres.append(part.split("#")[1].replace("_", " "))
+            
+            genres_str = " • ".join(genres) if genres else "N/A"
+            
+            text += f"🎬 <a href='{series_info['url']}'>{title}</a>\n"
+            text += f"      {year} • {genres_str}\n"
+            text += f"      ⭐ {rating}\n\n"
+            
+            series_buttons.append(
+                InlineKeyboardButton(
+                    text=f"{title}".upper(),
+                    callback_data=f"watchlist_remove#{media_type}#{tmdb_id}",
+                    style=enums.ButtonStyle.DANGER,
+                )
+            )
+        else:
+            text += f"🎬 Unknown Series (ID: {tmdb_id})\n\n"
+            series_buttons.append(
+                InlineKeyboardButton(text=f"ID: {tmdb_id}".upper(), callback_data=f"watchlist_remove#{media_type}#{tmdb_id}", style=enums.ButtonStyle.DANGER)
+            )
+    
+    buttons = []
+    # Chunk the series buttons into groups of 2 per row
+    for i in range(0, len(series_buttons), 2):
+        buttons.append(series_buttons[i:i+2])
+
+    shows_count = len(watchlist)
+    text += f"<code>────────────────\n{shows_count} shows • Updated just now</code>"
+    
+    buttons.append([
+        InlineKeyboardButton("◀️ Back", callback_data="start", style=enums.ButtonStyle.PRIMARY),
+        InlineKeyboardButton("🔐 Close", callback_data="close_data", style=enums.ButtonStyle.DEFAULT)
+    ])
+    return text, buttons
+
+
+@Client.on_callback_query(filters.regex("^mywatchlist_start$"))
+async def my_watchlist_start_callback_handler(client: Client, callback: CallbackQuery):
+    """Displays the user's watchlist when triggered from the start message."""
+    try:
+        await callback.answer() # Acknowledge the callback
+    except QueryIdInvalid:
+        pass
+
+    text, buttons = await _get_watchlist_message_and_buttons(callback.from_user.id)
+    
+    try:
+        await callback.message.edit_text(
+            text,
+            reply_markup=InlineKeyboardMarkup(buttons),
+            parse_mode=enums.ParseMode.HTML,
+            disable_web_page_preview=True,
+        )
+    except MessageNotModified:
+        pass
+
+
+@Client.on_message(filters.command("mywatchlist") & filters.private)
+async def my_watchlist_handler(client: Client, message: Message):
+    """Displays the user's watchlist."""
+    text, buttons = await _get_watchlist_message_and_buttons(message.from_user.id)
+
+    await message.reply(
+        text,
+        reply_markup=InlineKeyboardMarkup(buttons),
+        parse_mode=enums.ParseMode.HTML,
+        disable_web_page_preview=True,
+    )
+
+@Client.on_message(filters.command("addwatchlist") & filters.private)
+async def add_watchlist_handler(client: Client, message: Message):
+    """Allows users to add ongoing TV series to their watchlist."""
+    if len(message.command) < 2:
+        return await message.reply(
+            "Usage: /addwatchlist <TV series name>\n\n"
+            "Example: /addwatchlist The Crown"
+        )
+
+    query = message.text.split(None, 1)[1].strip()
+
+    # Search specifically for TV series
+    results = await search_tmdb_titles(query, preferred_type="tv", limit=5)
+
+    if not results:
+        return await message.reply(f"No TV series found for '{html.escape(query)}'.")
+
+    if len(results) == 1:
+        # Directly add if only one result
+        series_id = results[0]['id']
+        series_title = results[0]['title']
+        media_type = results[0]['media_type']
+
+        added = await db.add_to_watchlist(message.from_user.id, series_id, media_type)
+        if added:
+            await message.reply(f"✅ Added '{series_title}' to your watchlist!")
+        else:
+            await message.reply(f"ℹ️ '{series_title}' is already in your watchlist.")
+    else:
+        # Offer selection if multiple results
+        buttons = []
+        for item in results:
+            buttons.append(
+                [
+                    InlineKeyboardButton(
+                        text=f"{item['title']} - {item['year']}",
+                        callback_data=f"watchlist_add#{item['media_type']}#{item['id']}",
+                        style=enums.ButtonStyle.PRIMARY,
+                    )
+                ]
+            )
+        await message.reply(
+            f"Multiple TV series found for '{html.escape(query)}'. Please select one:",
+            reply_markup=InlineKeyboardMarkup(buttons),
+        )
+
+
+@Client.on_callback_query(filters.regex("^watchlist_add#"))
+async def watchlist_add_callback_handler(client: Client, callback: CallbackQuery):
+    """Handles callback for adding a series to watchlist from search results."""
+    try:
+        _, media_type, tmdb_id_str = callback.data.split("#", 2)
+        tmdb_id = int(tmdb_id_str)
+    except ValueError:
+        try:
+            return await callback.answer("Invalid selection.", show_alert=True)
+        except QueryIdInvalid:
+            return
+
+    # Fetch series details to get the title for feedback
+    series_info = await get_imdb_info(f"{media_type} {tmdb_id}", id=True)
+    if not series_info:
+        try:
+            return await callback.answer("Could not retrieve series details.", show_alert=True)
+        except QueryIdInvalid:
+            return
+
+    series_title = series_info.get("title", "Unknown Series")
+
+    added = await db.add_to_watchlist(callback.from_user.id, tmdb_id, media_type)
+
+    try:
+        if added:
+            await callback.answer(f"Added '{series_title}' to your watchlist!", show_alert=True)
+        else:
+            await callback.answer(f"ℹ️ '{series_title}' is already in your watchlist.", show_alert=True)
+    except QueryIdInvalid:
+        pass
+
+    try:
+        if added:
+            await callback.message.edit_text(f"✅ Added '{series_title}' to your watchlist.")
+        else:
+            await callback.message.edit_text(f"ℹ️ '{series_title}' is already in your watchlist.")
+    except MessageNotModified:
+        pass
+
+    # Remove the buttons after selection
+    try:
+        await callback.message.edit_reply_markup(reply_markup=None)
+    except Exception:
+        pass  # Message might have been deleted or edited by another user
+
+
+@Client.on_message(filters.command("mywatchlist") & filters.private)
+async def my_watchlist_handler(client: Client, message: Message):
+    """Displays the user's watchlist."""
+    watchlist = await db.get_watchlist(message.from_user.id)
+
+    if not watchlist:
+        return await message.reply("Your watchlist is empty. Use /addwatchlist to add TV series.")
+
+    text = "📺 Your Watchlist:\n\n"
+    buttons = []
+    for item in watchlist:
+        tmdb_id = item['tmdb_id']
+        media_type = item['media_type']
+        
+        # Fetch details for display
+        series_info = await get_imdb_info(f"{media_type} {tmdb_id}", id=True)
+        if series_info:
+            title = series_info.get("title", f"Series ID: {tmdb_id}")
+            year = series_info.get("year", "")
+            text += f"• <a href='{series_info['url']}'>{title}</a> ({year})\n"
+            buttons.append(
+                [
+                    InlineKeyboardButton(
+                        text=f"Remove {title}",
+                        callback_data=f"watchlist_remove#{media_type}#{tmdb_id}",
+                        style=enums.ButtonStyle.DANGER,
+                    )
+                ]
+            )
+        else:
+            text += f"• Unknown Series (ID: {tmdb_id})\n"
+            buttons.append(
+                [InlineKeyboardButton(text=f"Remove Unknown Series (ID: {tmdb_id})", callback_data=f"watchlist_remove#{media_type}#{tmdb_id}", style=enums.ButtonStyle.DANGER)]
+            )
+    
+    buttons.append([InlineKeyboardButton("🔐 Close", callback_data="close_data", style=enums.ButtonStyle.DANGER)])
+
+    await message.reply(
+        text,
+        reply_markup=InlineKeyboardMarkup(buttons),
+        parse_mode=enums.ParseMode.HTML,
+        disable_web_page_preview=True,
+    )
+
+
+@Client.on_callback_query(filters.regex("^watchlist_remove#"))
+async def watchlist_remove_callback_handler(client: Client, callback: CallbackQuery):
+    """Handles callback for removing a series from watchlist."""
+    try:
+        _, media_type, tmdb_id_str = callback.data.split("#", 2)
+        tmdb_id = int(tmdb_id_str)
+    except ValueError:
+        try:
+            return await callback.answer("Invalid selection.", show_alert=True)
+        except QueryIdInvalid:
+            return
+
+    # Fetch series details to get the title for feedback
+    series_info = await get_imdb_info(f"{media_type} {tmdb_id}", id=True)
+    series_title = series_info.get("title", "Unknown Series") if series_info else "Unknown Series"
+
+    removed = await db.remove_from_watchlist(callback.from_user.id, tmdb_id, media_type)
+
+    if removed:
+        try:
+            await callback.answer(f"Removed '{series_title}' from your watchlist.", show_alert=True)
+        except QueryIdInvalid:
+            pass
+        
+        # Re-fetch and update the watchlist message
+        text, buttons = await _get_watchlist_message_and_buttons(callback.from_user.id)
+        
+        try:
+            await callback.message.edit_text(
+                text,
+                reply_markup=InlineKeyboardMarkup(buttons),
+                parse_mode=enums.ParseMode.HTML,
+                disable_web_page_preview=True,
+            )
+        except MessageNotModified:
+            pass
+    else:
+        try:
+            await callback.answer(f"Failed to remove '{series_title}' from your watchlist.", show_alert=True)
+        except QueryIdInvalid:
+            pass
 @Client.on_message(filters.command("start") & filters.incoming)
 async def start_handler(client: Client, message: Message):
     # ── GROUP START ──
     if message.chat.type in {enums.ChatType.GROUP, enums.ChatType.SUPERGROUP}:
         buttons = [
-            [InlineKeyboardButton("🤖 Updates", url="https://t.me/+w7aX0q-ex1U1NDc1", style=enums.ButtonStyle.SUCCESS)],
+            [InlineKeyboardButton("👀 Watchlist", callback_data="mywatchlist_start", style=enums.ButtonStyle.SUCCESS)],
             [InlineKeyboardButton("❓Help", url=f"https://t.me/{RuntimeCache.bot_username}?start=help", style=enums.ButtonStyle.PRIMARY)]
         ]
 
@@ -710,7 +1045,7 @@ async def start_handler(client: Client, message: Message):
         buttons = [
             [
                 InlineKeyboardButton("🔍 Search", switch_inline_query_current_chat="", style=enums.ButtonStyle.SUCCESS),
-                InlineKeyboardButton("🤖 Updates", url="https://t.me/+w7aX0q-ex1U1NDc1", style=enums.ButtonStyle.PRIMARY),
+                InlineKeyboardButton("👀 Watchlist", callback_data="mywatchlist_start", style=enums.ButtonStyle.PRIMARY),
             ],
             [
                 InlineKeyboardButton("ℹ️ About", callback_data="about", style=enums.ButtonStyle.PRIMARY),

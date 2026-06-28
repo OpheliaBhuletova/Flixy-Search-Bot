@@ -415,7 +415,7 @@ async def help_about_callback_handler(client: Client, callback: CallbackQuery):
         buttons = [
             [
                 InlineKeyboardButton("🔍 Search", switch_inline_query_current_chat="", style=enums.ButtonStyle.SUCCESS),
-                InlineKeyboardButton("🤖 Updates", url="https://t.me/+w7aX0q-ex1U1NDc1", style=enums.ButtonStyle.PRIMARY),
+                InlineKeyboardButton("👀 Watchlist", callback_data="mywatchlist_start", style=enums.ButtonStyle.PRIMARY),
             ],
             [
                 InlineKeyboardButton("ℹ️ About", callback_data="about", style=enums.ButtonStyle.PRIMARY),

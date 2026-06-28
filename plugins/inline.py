@@ -1,4 +1,5 @@
 import logging
+from datetime import datetime, timezone
 
 from pyrogram import Client, enums
 from pyrogram.types import (
@@ -11,8 +12,8 @@ from pyrogram.errors.exceptions.bad_request_400 import QueryIdInvalid
 
 from bot.config import settings
 from bot.utils.cache import RuntimeCache
-from bot.utils.helpers import get_size
-from database.ia_filterdb import get_search_results
+from bot.utils.helpers import get_size, remove_file_extension
+from database.ia_filterdb import get_inline_search_results_with_fallback
 
 logger = logging.getLogger(__name__)
 
@@ -48,6 +49,8 @@ async def inline_query_handler(client: Client, query: InlineQuery):
         keyword = query_text
         file_type = None
 
+    now_date = datetime.now(timezone.utc).date()
+
     reply_markup = InlineKeyboardMarkup(
         [[
             InlineKeyboardButton(
@@ -58,7 +61,7 @@ async def inline_query_handler(client: Client, query: InlineQuery):
         ]]
     )
 
-    files, next_offset, total = await get_search_results(
+    files, next_offset, total = await get_inline_search_results_with_fallback(
         keyword,
         file_type=file_type,
         max_results=10,
@@ -68,9 +71,14 @@ async def inline_query_handler(client: Client, query: InlineQuery):
     results = []
 
     for file in files:
-        title = file.file_name
-        size = get_size(file.file_size)
-        caption = file.caption
+        title = file.get('file_name') if isinstance(file, dict) else file.file_name
+        title = remove_file_extension(title)  # Remove file extension from display
+        size = get_size(file.get('file_size') if isinstance(file, dict) else file.file_size)
+        caption = file.get('caption') if isinstance(file, dict) else file.caption
+        file_id = file.get('_id') if isinstance(file, dict) else file.file_id
+
+        created_at = file.get('created_at') if isinstance(file, dict) else getattr(file, "created_at", None)
+        is_new_today = created_at.date() == now_date if created_at else False
 
         if settings.CUSTOM_FILE_CAPTION:
             try:
@@ -85,12 +93,13 @@ async def inline_query_handler(client: Client, query: InlineQuery):
         if not caption:
             caption = title
 
+        description = f"Size: {size}\nType: {file.get('file_type') if isinstance(file, dict) else file.file_type}"
         results.append(
             InlineQueryResultCachedDocument(
                 title=title,
-                document_file_id=file.file_id,
+                document_file_id=file_id,
                 caption=caption,
-                description=f"Size: {size}\nType: {file.file_type}",
+                description=f"✨ Recently Added\n{description}" if is_new_today else description,
                 reply_markup=reply_markup,
             )
         )

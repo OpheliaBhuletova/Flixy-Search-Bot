@@ -10,9 +10,9 @@ class Texts:
     # ───────────────────────────────────
 
     START_TXT = """
-👋 Hey Nibin, welcome to <b>F L I X Y</b>
+👋 Hi {}, welcome to <b>F L I X Y</b>
 
-🎬 <b>Search movies instantly</b> — just type the name inline.
+🎬 Use inline search for movies, and 📩 DM me the series name for TV shows.
 """
 
     HELP_TXT = """
@@ -174,6 +174,8 @@ Helpful commands for information and utilities.
 • `/info` — detailed user information  
 • `/imdb` — fetch IMDb movie details  
 • `/search` — search movies manually
+• `/addwatchlist` — add an ongoing TV series to your watchlist
+• `/mywatchlist` — view your watchlist
 """
 
     # ───────────────────────────────────

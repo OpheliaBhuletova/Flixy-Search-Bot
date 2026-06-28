@@ -8,7 +8,7 @@ from typing import AsyncGenerator, Optional, Union
 
 import aiohttp
 from aiohttp import web
-from pyrogram import Client, __version__, idle, types, enums
+from pyrogram import Client, __version__, idle, enums
 from pyrogram.errors import FloodWait, PeerIdInvalid
 
 from bot.config import LOG_STR, settings
@@ -19,10 +19,8 @@ from database.ia_filterdb import Media
 from database.users_chats_db import get_db_instance
 from plugins import web_server
 
-import pyrogram
-
 logging.basicConfig(level=logging.INFO)
-logging.info(f"--- RUNNING PYROTQFORK VERSION: {pyrogram.__version__} ---")
+logging.info(f"--- RUNNING PYROTQFORK VERSION: {__version__} ---")
 
 # ─── Logging setup ────────────────────────────────────────────────────
 os.makedirs("logs", exist_ok=True)
@@ -108,7 +106,7 @@ async def get_chat_info(app: Client, chat_id: int) -> dict | None:
     except Exception as e:
         if "Peer id invalid" not in str(e):
             raise
-    
+
     return await botapi_get_chat(app.bot_token, chat_id)
 
 
@@ -125,15 +123,20 @@ class Bot(Client):
         )
 
     async def start(self):
-        # Capture startup time at the very beginning
         RuntimeCache.startup_time = datetime.now()
         
+        # Pre-flight check: Ensure mandatory multi-cluster database URLs are provided
+        # to prevent defaulting to 'localhost' and causing connection timeouts.
+        if not settings.DATABASE_URL_INLINE or not settings.DATABASE_URL_PM:
+            logger.critical("FATAL: DATABASE_URL_INLINE and DATABASE_URL_PM are required to start the bot.")
+            return
+
         # Load banned users/chats + ensure indexes
         db = get_db_instance()
         try:
             await db.ensure_indexes()
         except Exception:
-            logger.exception("Failed to ensure users/chats indexes")
+            logger.exception("Failed to ensure user/chat indexes")
 
         RuntimeCache.banned_users, RuntimeCache.banned_chats = await db.get_banned()
         # make sure sudo users are not accidentally treated as banned
@@ -155,8 +158,7 @@ class Bot(Client):
                 await super().start()
                 break
             except FloodWait as fw:
-                wait = getattr(fw, "value", None) or getattr(fw, "x", None) or getattr(fw, "seconds", None)
-                wait = wait or (fw.args[0] if fw.args else None)
+                wait = getattr(fw, "value", 0) or (fw.args[0] if fw.args else 60)
                 logger.warning("FloodWait on bot authorization (%s seconds), sleeping before retry", wait)
                 if wait:
                     await asyncio.sleep(wait)
@@ -166,7 +168,7 @@ class Bot(Client):
             await Media.ensure_indexes()
         except Exception as e:
             msg = str(e)
-            if ("only one text index" in msg) or (getattr(e, "code", None) in (67, 85)):
+            if "only one text index" in msg or getattr(e, "code", None) in (67, 85):
                 logger.warning("text index conflict detected; attempting to repair indexes: %s", e)
                 try:
                     coll = Media.collection
@@ -188,14 +190,13 @@ class Bot(Client):
         RuntimeCache.bot_name = me.first_name
         RuntimeCache.current = me.id
 
-        # load persisted ad flag into runtime cache (default: False)
+        # Load persisted ad flag
         try:
             RuntimeCache.ad_enabled = await db.get_ad_enabled()
         except Exception:
             RuntimeCache.ad_enabled = False
 
         self.username = f"@{me.username}"
-
         logger.info("%s started with Pyrogram v%s as %s", me.first_name, __version__, self.username)
         logger.info(LOG_STR)
 
@@ -204,8 +205,6 @@ class Bot(Client):
         if log_channel:
             try:
                 boot_duration = (datetime.now() - RuntimeCache.startup_time).total_seconds()
-                
-                # Measure ping
                 ping_start = time.perf_counter()
                 await self.get_me()
                 ping_ms = (time.perf_counter() - ping_start) * 1000
@@ -226,7 +225,7 @@ class Bot(Client):
                     int(log_channel),
                     startup_msg,
                 )
-                # delete log message after 1 hour if we got a message object
+                # Auto-delete startup log after 60 seconds
                 if msg:
                     schedule_delete_message(self, msg.chat.id, msg.id, delay_seconds=60)
             except Exception:
@@ -235,11 +234,9 @@ class Bot(Client):
         # Start periodic ad sender if channels are configured
         if getattr(settings, "AD_CHANNEL", None):
             async def _ad_sender(app: Client):
-                # interval: 6 hours, delete_after: 3 hours
-                interval = 6 * 3600
-                delete_after = 3 * 3600
+                interval, delete_after = 6 * 3600, 3 * 3600
                 while True:
-                    # refresh persisted flag at start of loop
+                    # Refresh persisted flag at start of loop
                     try:
                         ad_enabled = await db.get_ad_enabled()
                         RuntimeCache.ad_enabled = bool(ad_enabled)
@@ -249,7 +246,6 @@ class Bot(Client):
                     if ad_enabled:
                         for ch in settings.AD_CHANNEL:
                             try:
-                                # hardcoded ad message (HTML)
                                 msg_text = (
                                     "<b>🚀 Tired of Searching Everywhere for Movies?</b>\n\n"
                                     "🍿 Let <b>F L I X Y</b> do it for you.\n\n"
@@ -268,11 +264,9 @@ class Bot(Client):
                                     disable_web_page_preview=True,
                                     reply_markup=buttons,
                                 )
-                                # schedule deletion after delete_after seconds
                                 schedule_delete_message(app, sent.chat.id, sent.id, delay_seconds=delete_after)
                             except Exception as exc:
-                                # if peer is invalid (ValueError from utils or PeerIdInvalid),
-                                # try sending via Bot API instead of logging an error.
+                                # Fallback to Bot API if peer is invalid
                                 is_peer_error = (
                                     (isinstance(exc, ValueError) and "Peer id invalid" in str(exc))
                                     or isinstance(exc, PeerIdInvalid)
@@ -299,27 +293,6 @@ class Bot(Client):
     async def stop(self, *args):
         await super().stop()
         logger.info("Bot stopped. Bye.")
-
-    async def iter_messages(
-        self,
-        chat_id: Union[int, str],
-        limit: int,
-        offset: int = 0,
-    ) -> Optional[AsyncGenerator[types.Message, None]]:
-        """
-        Legacy helper to iterate messages sequentially.
-        NOTE: Pyrogram already provides iter_messages().
-        Kept for backward compatibility.
-        """
-        current = offset
-        while True:
-            diff = min(200, limit - current)
-            if diff <= 0:
-                return
-            messages = await self.get_messages(chat_id, list(range(current, current + diff + 1)))
-            for message in messages:
-                yield message
-                current += 1
 
 
 async def main():

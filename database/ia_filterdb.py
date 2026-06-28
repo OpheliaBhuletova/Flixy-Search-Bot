@@ -1,26 +1,21 @@
 import logging
 import re
 import base64
+from datetime import datetime, timezone
 from struct import pack
 from typing import Tuple, List
 
 from pyrogram.file_id import FileId
 from pymongo.errors import DuplicateKeyError
-from marshmallow.exceptions import ValidationError
-
 from umongo import Instance, Document, fields
-from datetime import datetime, timezone
 
 from bot.config import settings
+from database.mongo import get_db, get_inline_collection, get_pm_collection, get_collection
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.WARNING)
 
-from database.mongo import get_db
-from umongo import Instance
-
 instance = Instance.from_db(get_db())
-
 
 # ─── Media Document ──────────────────────────────────────────────────────
 @instance.register
@@ -35,13 +30,11 @@ class Media(Document):
     created_at = fields.DateTimeField(required=True)
 
     class Meta:
-        collection_name = settings.COLLECTION_NAME
-        # MongoDB allows only one text index per collection. Use a compound
-        # text index covering both file_name and caption fields. The
-        # 'sparse' option cannot be applied to individual fields inside a
-        # compound text index, so the caption document may be empty in some
-        # records but that's fine for search.
+        collection_name = "Cluster0"
         indexes = [
+            # Only one text index is allowed per collection.
+            # 'sparse' cannot be applied to individual fields in a compound text index.
+            # Empty captions are handled gracefully by the search engine.
             {"key": [("file_name", "text"), ("caption", "text")]},
             "file_type",
             "created_at",
@@ -49,60 +42,104 @@ class Media(Document):
 
 
 # ─── Save Media ──────────────────────────────────────────────────────────
-async def save_file(media) -> Tuple[bool, int, str]:
+async def save_file(media, db_type: str = "default") -> Tuple[bool, int, str]:
     """
     Store media document and return status plus normalized movie title.
+
+    Args:
+        media: Media object to save
+        db_type: "default", "inline", or "pm" - which collection to save to
 
     Returns:
         (True, 1, title)   → saved
         (False, 0, title)  → duplicate
         (False, 2, title)  → error
     """
-
     file_id, file_ref = unpack_new_file_id(media.file_id)
     file_name = re.sub(r"[_\-\.\+]", " ", str(media.file_name))
-    _display_title = _announcement_key(file_name)
+    display_title = _announcement_key(file_name)
+    
+    file_data = {
+        "_id": file_id,
+        "file_ref": file_ref,
+        "file_name": file_name,
+        "file_size": media.file_size,
+        "file_type": media.file_type,
+        "mime_type": getattr(media, "mime_type", None),
+        "caption": media.caption.html if media.caption else None,
+        "created_at": datetime.now(timezone.utc),
+    }
+    
     try:
-        file = Media(
-            file_id=file_id,
-            file_ref=file_ref,
-            file_name=file_name,
-            file_size=media.file_size,
-            file_type=media.file_type,
-            mime_type = getattr(media, "mime_type", None),
-            caption=media.caption.html if media.caption else None,
-            created_at=datetime.now(timezone.utc),
-        )
-    except ValidationError:
-        logger.exception("Validation error while saving media")
-        return False, 2, _display_title or file_name
-
-    try:
-        await file.commit()
-        return True, 1, _display_title or file_name
+        collection = get_collection(db_type)
+        await collection.insert_one(file_data)
+        return True, 1, display_title or file_name
     except DuplicateKeyError:
-        return False, 0, _display_title or file_name
-    except Exception:
-        logger.exception("Unexpected error while saving media")
-        return False, 2, _display_title or file_name
+        return False, 0, display_title or file_name
+    except Exception as e:
+        logger.exception(f"Unexpected error while saving media to {db_type}: {e}")
+        return False, 2, display_title or file_name
+
+async def save_file_inline(media) -> Tuple[bool, int, str]:
+    """
+    Save media to the inline search collection.
+    
+    Args:
+        media: Media object to save
+    
+    Returns:
+        (True, 1, title)   → saved
+        (False, 0, title)  → duplicate
+        (False, 2, title)  → error
+    """
+    return await save_file(media, db_type="inline")
+
+async def save_file_pm(media) -> Tuple[bool, int, str]:
+    """
+    Save media to the PM search collection.
+    
+    Args:
+        media: Media object to save
+    
+    Returns:
+        (True, 1, title)   → saved
+        (False, 0, title)  → duplicate
+        (False, 2, title)  → error
+    """
+    return await save_file(media, db_type="pm")
 
 # ─── Search Engine ───────────────────────────────────────────────────────
-async def get_search_results(
+async def _generic_search(
     query: str,
+    collection,
     file_type: str = None,
     max_results: int = 10,
     offset: int = 0,
-    filter: bool = False,
+    filter: bool = False,  # Reserved for backward compatibility
+    sort_by_episode: bool = False,
 ):
+    """
+    Internal generic search function that works with any collection.
+    
+    Args:
+        query: Search query string
+        collection: Motor collection to search in
+        file_type: Optional file type filter
+        max_results: Number of results per page
+        offset: Pagination offset
+        filter: Unused; kept for compatibility
+        sort_by_episode: Sort priority for TV Series
+    
+    Returns:
+        (files, next_offset, total_results)
+    """
     query = query.strip()
-
     if not query:
         pattern = ".*"
-    elif " " not in query:
-        pattern = rf"(\b|[.\+\-_]){re.escape(query)}(\b|[.\+\-_])"
     else:
-        pattern = re.escape(query).replace(r"\ ", r".*[\s.\+\-_]")
-
+        # Replace spaces with wildcards to allow flexible partial matching
+        pattern = re.escape(query).replace(r"\ ", r".*")
+        
     try:
         regex = re.compile(pattern, flags=re.IGNORECASE)
     except re.error:
@@ -116,12 +153,10 @@ async def get_search_results(
     if file_type:
         mongo_filter["file_type"] = file_type
 
-    total_results = await Media.count_documents(mongo_filter)
+    total_results = await collection.count_documents(mongo_filter)
     
-    # Limit max fetch to avoid loading entire database into memory for broad queries
-    MAX_MEMORY_RESULTS = 100
-    if total_results > MAX_MEMORY_RESULTS:
-        total_results = MAX_MEMORY_RESULTS
+    # We keep a memory limit for the sorting logic, but allow the counter to be accurate
+    MAX_MEMORY_RESULTS = 300 
 
     next_offset = offset + max_results
     if next_offset >= total_results:
@@ -129,25 +164,23 @@ async def get_search_results(
 
     sort_field = "created_at" if not query else "_id"
 
-    # Fetch up to MAX_MEMORY_RESULTS instead of just max_results for the current page
+    # Increase search depth to ensure matches are found in larger databases
     cursor = (
-        Media.find(mongo_filter)
+        collection.find(mongo_filter)
         .sort(sort_field, -1)
         .limit(MAX_MEMORY_RESULTS)
     )
-
     all_files = await cursor.to_list(length=MAX_MEMORY_RESULTS)
 
     if query:
         query_lower = query.lower()
-
         exact_matches = []
         startswith_matches = []
         contains_matches = []
         other_matches = []
 
         for file in all_files:
-            name = (file.file_name or "").strip().lower()
+            name = (file.get("file_name") or "").strip().lower()
 
             if name == query_lower:
                 exact_matches.append(file)
@@ -167,25 +200,122 @@ async def get_search_results(
             if "english" in name or "eng" in name: return 5
             return 6
 
-        sort_key = lambda x: (get_lang_rank(x.file_name or ""), -x.file_size)
-        
+        def get_episode_rank(name: str) -> Tuple[float, float]:
+            name = name.lower()
+            match = re.search(r's(\d+)[\s_-]*e(\d+)', name)
+            if match:
+                return (float(match.group(1)), float(match.group(2)))
+            match = re.search(r'(?:e|ep|episode)[\s_-]*(\d+)', name)
+            if match:
+                return (1.0, float(match.group(1)))
+            return (9999.0, 9999.0)
+
+        def is_tv_series(name: str) -> bool:
+            """Check if filename contains season/episode info"""
+            name = name.lower()
+            return bool(re.search(r's\d+[\s_-]*e\d+', name)) or bool(re.search(r'(?:e|ep|episode)[\s_-]*\d+', name))
+
+        def sort_key_func(x):
+            """
+            Sort key that groups:
+            - TV Series by season/episode
+            - Movies by language then file size
+            """
+            name = x.get("file_name") or ""
+            if is_tv_series(name):
+                # TV Series: sort by season, episode
+                return (0, get_episode_rank(name), name)
+            else:
+                # Movies: sort by language, file size (desc)
+                return (1, get_lang_rank(name), -x.get("file_size", 0), name)
+
+        if sort_by_episode:
+            sort_key = lambda x: (get_episode_rank(x.get("file_name") or ""), get_lang_rank(x.get("file_name") or ""), -x.get("file_size", 0))
+        else:
+            sort_key = sort_key_func
+
         exact_matches.sort(key=sort_key)
         startswith_matches.sort(key=sort_key)
         contains_matches.sort(key=sort_key)
         other_matches.sort(key=sort_key)
-
         all_files = exact_matches + startswith_matches + contains_matches + other_matches
 
     # Apply pagination in Python after global sorting
     files = all_files[offset : offset + max_results]
-
     return files, next_offset, total_results
 
 
+async def get_search_results(
+    query: str,
+    file_type: str = None,
+    max_results: int = 10,
+    offset: int = 0,
+    filter: bool = False,
+):
+    """
+    Search with automatic database routing based on ENABLE_MULTI_DB setting.
+    When multi-DB is disabled, uses default collection.
+    """
+    collection = get_collection("default")
+    return await _generic_search(query, collection, file_type, max_results, offset, filter)
+
+async def get_inline_search_results(
+    query: str,
+    file_type: str = None,
+    max_results: int = 10,
+    offset: int = 0,
+    filter: bool = False,
+):
+    """Search the inline collection."""
+    collection = get_inline_collection()
+    return await _generic_search(query, collection, file_type, max_results, offset, filter)
+
+async def get_pm_search_results(
+    query: str,
+    file_type: str = None,
+    max_results: int = 10,
+    offset: int = 0,
+    filter: bool = False,
+):
+    """Search the PM collection."""
+    collection = get_pm_collection()
+    return await _generic_search(query, collection, file_type, max_results, offset, filter)
+
 # ─── File Lookup ─────────────────────────────────────────────────────────
-async def get_file_details(file_id: str) -> List[Media]:
-    cursor = Media.find({"file_id": file_id})
-    return await cursor.to_list(length=1)
+async def get_file_details(file_id: str, db_type: str = "default") -> List:
+    """
+    Lookup file by ID from specified collection, with fallback to other collections.
+    
+    Args:
+        file_id: File ID to search for
+        db_type: "default", "inline", or "pm" - primary collection to search
+    
+    Returns:
+        List of matching file documents
+    """
+    # Try the specified collection first
+    collection = get_collection(db_type)
+    cursor = collection.find({"_id": file_id})
+    result = await cursor.to_list(length=1)
+
+    if result:
+        return result
+
+    # If not found and db_type is "default", try other collections
+    if db_type == "default":
+        pm_collection = get_pm_collection()
+        cursor = pm_collection.find({"_id": file_id})
+        result = await cursor.to_list(length=1)
+        if result:
+            return result
+        
+        # Try inline collection
+        inline_collection = get_inline_collection()
+        cursor = inline_collection.find({"_id": file_id})
+        result = await cursor.to_list(length=1)
+        if result:
+            return result
+    return []
 
 async def delete_file(file_id: str) -> bool:
     """Delete a file from the database by its file_id."""
@@ -210,19 +340,16 @@ def encode_file_id(data: bytes) -> str:
                 result += b"\x00" + bytes([zero_count])
                 zero_count = 0
             result += bytes([byte])
-
     return base64.urlsafe_b64encode(result).decode().rstrip("=")
-
 
 def encode_file_ref(file_ref: bytes) -> str:
     return base64.urlsafe_b64encode(file_ref).decode().rstrip("=")
-
 
 # ─── Announcement Tracking ─────────────────────────────────────────────
 def _announcement_key(title: str) -> str:
     """Generate a stable key for title announcement tracking.
 
-    The bot only broadcasts a given movie once, even if multiple versions
+    The bot broadcasts a given movie once, even if multiple versions
     of the same movie (different quality/size/etc.) are indexed.
 
     To do that, we only use the "Name (Year)" part of the title when
@@ -239,10 +366,8 @@ def _announcement_key(title: str) -> str:
     else:
         key = title
 
-    # Normalize whitespace/case for stable comparisons.
     key = re.sub(r"\s+", " ", key).lower().strip()
     return key
-
 
 async def announce_title(title: str) -> bool:
     """Return True if title not announced before, and record it.
@@ -289,6 +414,48 @@ async def announce_title(title: str) -> bool:
         # On error, assume it's already announced to prevent repeated errors
         return False
 
+# ─── Fallback Search Wrappers (Phase 5: Backward Compatibility) ──────
+async def get_inline_search_results_with_fallback(
+    query: str,
+    file_type: str = None,
+    max_results: int = 10,
+    offset: int = 0,
+    filter: bool = False,
+):
+    """
+    Search inline collection with automatic fallback.
+    
+    If ENABLE_MULTI_DB is True, uses get_inline_search_results().
+    If False, falls back to get_search_results() (single DB mode).
+    
+    Returns:
+        (files, next_offset, total_results)
+    """
+    if True:  # Hardcoded: Multi-DB enabled
+        return await get_inline_search_results(query, file_type, max_results, offset, filter)
+    else:
+        return await get_search_results(query, file_type, max_results, offset, filter)
+
+async def get_pm_search_results_with_fallback(
+    query: str,
+    file_type: str = None,
+    max_results: int = 10,
+    offset: int = 0,
+    filter: bool = False,
+):
+    """
+    Search PM collection with automatic fallback.
+    
+    If ENABLE_MULTI_DB is True, uses get_pm_search_results().
+    If False, falls back to get_search_results() (single DB mode).
+    
+    Returns:
+        (files, next_offset, total_results)
+    """
+    if True:  # Hardcoded: Multi-DB enabled
+        return await get_pm_search_results(query, file_type, max_results, offset, filter)
+    else:
+        return await _generic_search(query, get_collection("default"), file_type, max_results, offset, filter)
 
 def unpack_new_file_id(new_file_id: str) -> Tuple[str, str]:
     decoded = FileId.decode(new_file_id)
@@ -306,15 +473,63 @@ def unpack_new_file_id(new_file_id: str) -> Tuple[str, str]:
     file_ref = encode_file_ref(decoded.file_reference)
     return file_id, file_ref
 
-def _display_title(title: str) -> str:
-    if not title:
-        return ""
-
-    title = title.strip()
-    match = re.search(r"\(\s*\d{4}\s*\)", title)
-    if match:
-        value = title[: match.end()]
-    else:
-        value = title
-
-    return re.sub(r"\s+", " ", value).strip()
+async def delete_file_by_id(file_id: str, db_type: str = "default"):
+    """
+    Delete a media document from the specified collection and its announcement entry.
+    Falls back to searching all databases if not found in the specified one.
+    
+    Args:
+        file_id: The database _id (unpacked file ID)
+        db_type: "default", "inline", or "pm"
+    
+    Returns:
+        (True, file_name) if deletion successful
+        (False, None) if file not found or error occurred
+    """
+    try:
+        # List of database types to search (try specified first, then others)
+        db_types_to_search = [db_type]
+        if db_type != "default":
+            db_types_to_search.append("default")
+        if db_type != "inline":
+            db_types_to_search.append("inline")
+        if db_type != "pm":
+            db_types_to_search.append("pm")
+        
+        file_name = None
+        found_db_type = None
+        
+        # Search all databases for the file
+        for search_db_type in db_types_to_search:
+            collection = get_collection(search_db_type)
+            doc = await collection.find_one({"_id": file_id})
+            if doc:
+                file_name = doc.get("file_name", "")
+                found_db_type = search_db_type
+                logger.info(f"📍 Found file in {search_db_type} database (searched as {db_type})")
+                break
+        
+        if not found_db_type:
+            logger.warning(f"⚠️  File not found for deletion: {file_id} in any database")
+            return False, None
+        
+        # Remove announcement entry if applicable
+        if file_name:
+            normalized_title = _announcement_key(file_name)
+            if normalized_title:
+                delete_result = await get_db().announced_titles.delete_one({"_id": normalized_title})
+                if delete_result.deleted_count > 0:
+                    logger.info(f"🗑️  Removed announcement entry: {normalized_title}")
+        
+        # Delete the media document from the correct collection
+        collection = get_collection(found_db_type)
+        result = await collection.delete_one({"_id": file_id})
+        if result.deleted_count > 0:
+            logger.info(f"🗑️  Deleted from {found_db_type} collection: {file_name or file_id}")
+            return True, file_name or file_id
+        else:
+            logger.warning(f"⚠️  File not found for deletion: {file_id} in {found_db_type}")
+            return False, None
+    except Exception as e:
+        logger.exception(f"❌ Error deleting file {file_id} from {db_type}: {e}")
+        return False, None

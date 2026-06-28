@@ -68,3 +68,7 @@ venv.bak/
 # Misc
 .goutputstream-*
 result.json
+bot/Flixy_Search_Bot.session-wal
+bot/Flixy_Search_Bot.session-shm
+*.session-shm
+*.session-shm

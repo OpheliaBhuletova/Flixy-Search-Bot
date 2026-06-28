@@ -21,7 +21,8 @@ from pyrogram.errors.exceptions.bad_request_400 import (
 
 from bot.config import settings
 from bot.utils.cache import RuntimeCache
-from database.ia_filterdb import save_file, announce_title
+from database.ia_filterdb import save_file, save_file_inline, save_file_pm, announce_title
+from bot.utils.broadcast import new_movie_broadcast
 
 logger = logging.getLogger(__name__)
 
@@ -40,9 +41,10 @@ async def index_callback_handler(client: Client, query: CallbackQuery):
         RuntimeCache.cancel_index = True
         return await query.answer("Cancelling indexing...")
 
-    _, action, chat, last_msg_id, from_user = query.data.split("#")
-
-    if action == "reject":
+    parts = query.data.split("#")
+    
+    if parts[1] == "reject":
+        _, action, chat, last_msg_id, from_user = parts
         await query.message.delete()
         await client.send_message(
             int(from_user),
@@ -51,13 +53,48 @@ async def index_callback_handler(client: Client, query: CallbackQuery):
         )
         return
 
+    if parts[1] == "db_select":
+        # Database selection callback
+        _, action, db_type, chat, last_msg_id, from_user = parts
+        
+        if lock.locked():
+            return await query.answer(
+                "Please wait until the previous indexing finishes.",
+                show_alert=True,
+            )
+        
+        await query.answer(f"Indexing to {db_type.upper()} database... ⏳", show_alert=True)
+        
+        await query.message.edit(
+            f"Starting indexing to {db_type.upper()} database...",
+            reply_markup=InlineKeyboardMarkup(
+                    [[InlineKeyboardButton("Cancel", callback_data="index_cancel", style=enums.ButtonStyle.DANGER)]]))
+        
+        try:
+            chat = int(chat)
+        except ValueError:
+            pass
+        
+        await index_files_to_db(
+            client,
+            chat,
+            int(last_msg_id),
+            query.message,
+            db_type=db_type,
+        )
+        return
+    
+    # Accept callback - ask for database selection
+    _, action, chat, last_msg_id, from_user = parts[:5]
+    
+    if action != "accept":
+        return
+
     if lock.locked():
         return await query.answer(
             "Please wait until the previous indexing finishes.",
             show_alert=True,
         )
-
-    await query.answer("Processing... ⏳", show_alert=True)
 
     if int(from_user) not in settings.ADMINS:
         await client.send_message(
@@ -65,22 +102,49 @@ async def index_callback_handler(client: Client, query: CallbackQuery):
             f"Your submission for indexing `{chat}` was approved and will be processed soon.",
             reply_to_message_id=int(last_msg_id),
         )
-
-    await query.message.edit(
-        "Starting indexing...",
-        reply_markup=InlineKeyboardMarkup(
-                [[InlineKeyboardButton("Cancel", callback_data="index_cancel", style=enums.ButtonStyle.DANGER)]]))
-    try:
-        chat = int(chat)
-    except ValueError:
-        pass
-
-    await index_files_to_db(
-        client,
-        chat,
-        int(last_msg_id),
-        query.message,
-    )
+    
+    # Ask for database selection
+    if True:  # Hardcoded: Multi-DB enabled
+        await query.answer()
+        db_buttons = [
+            [
+                InlineKeyboardButton(
+                    "📌 Inline DB",
+                    callback_data=f"index#db_select#inline#{chat}#{last_msg_id}#{from_user}",
+                    style=enums.ButtonStyle.PRIMARY,
+                )
+            ],
+            [
+                InlineKeyboardButton(
+                    "💬 PM DB",
+                    callback_data=f"index#db_select#pm#{chat}#{last_msg_id}#{from_user}",
+                    style=enums.ButtonStyle.PRIMARY,
+                )
+            ],
+        ]
+        return await query.message.edit(
+            f"Select target database for indexing `{chat}`:",
+            reply_markup=InlineKeyboardMarkup(db_buttons),
+        )
+    else:
+        # Multi-DB disabled, proceed with default
+        await query.answer("Processing... ⏳", show_alert=True)
+        await query.message.edit(
+            "Starting indexing...",
+            reply_markup=InlineKeyboardMarkup(
+                    [[InlineKeyboardButton("Cancel", callback_data="index_cancel", style=enums.ButtonStyle.DANGER)]]))
+        try:
+            chat = int(chat)
+        except ValueError:
+            pass
+        
+        await index_files_to_db(
+            client,
+            chat,
+            int(last_msg_id),
+            query.message,
+            db_type="default",
+        )
 
 
 # ─── SEND INDEX REQUEST ───────────────────────────────────────────────
@@ -198,6 +262,7 @@ async def index_files_to_db(
     chat_id: int,
     last_msg_id: int,
     status_msg: Message,
+    db_type: str = "default",
 ):
     total = duplicate = errors = deleted = no_media = unsupported = 0
     start_time = time.time()
@@ -221,98 +286,127 @@ async def index_files_to_db(
         current = RuntimeCache.index_skip
         total_target = max(last_msg_id - RuntimeCache.index_skip, 0)
 
-        try:
-            async for msg in client.iter_messages(chat_id, last_msg_id, current):
-                if RuntimeCache.cancel_index:
-                    break
+        # Bots cannot iterate history; we crawl backwards using message IDs instead
+        for i in range(0, total_target, 150):
+            if RuntimeCache.cancel_index:
+                break
+            
+            try:
+                # Generate a batch of IDs to fetch (descending)
+                batch_ids = [last_msg_id - j for j in range(i, min(i + 150, total_target))]
+                messages = await client.get_messages(chat_id, batch_ids)
 
-                current += 1
+                for msg in messages:
+                    if RuntimeCache.cancel_index:
+                        break
 
-                if current % 20 == 0:
-                    elapsed = round(time.time() - start_time, 2)
-                    processed = total + duplicate + deleted + no_media + unsupported + errors
-                    speed = round(processed / elapsed, 2) if elapsed > 0 else 0
-                    progress_percent = round((current / total_target) * 100, 1) if total_target > 0 else 0
-                    progress_bar = build_progress_bar(current, total_target)
+                    current += 1
 
-                    remaining_items = max(total_target - current, 0)
-                    eta_seconds = round(remaining_items / speed, 2) if speed > 0 else 0
+                    if msg.empty:
+                        deleted += 1
+                        continue
 
-                    await status_msg.edit(
-                        "📦 <b>Indexing in Progress</b>\n\n"
-                        f"<code>{progress_bar}</code> <b>{progress_percent}%</b>\n\n"
-                        "<b>Summary:</b>\n"
-                        f"• 📥 Fetched: <code>{current}</code> / <code>{total_target}</code>\n"
-                        f"• ✅ Saved: <code>{total}</code>\n"
-                        f"• ♻️ Duplicates: <code>{duplicate}</code>\n"
-                        f"• 🗑 Deleted: <code>{deleted}</code>\n"
-                        f"• 📄 Non-media: <code>{no_media + unsupported}</code>\n"
-                        f"• ⚠️ Errors: <code>{errors}</code>\n\n"
-                        f"⏱ <b>Time:</b> <code>{elapsed}s</code>\n"
-                        f"⚡ <b>Speed:</b> <code>{speed} files/sec</code>\n"
-                        f"🕒 <b>ETA:</b> <code>{format_eta(eta_seconds)}</code>",
-                        parse_mode=enums.ParseMode.HTML,
-                        reply_markup=InlineKeyboardMarkup(
-                            [[InlineKeyboardButton("Cancel", callback_data="index_cancel", style=enums.ButtonStyle.DANGER)]]
-                        ),
-                    )
+                    if not msg.media:
+                        no_media += 1
+                        continue
 
-                if msg.empty:
-                    deleted += 1
-                    continue
+                    if msg.media not in {
+                        enums.MessageMediaType.VIDEO,
+                        enums.MessageMediaType.AUDIO,
+                        enums.MessageMediaType.DOCUMENT,
+                    }:
+                        unsupported += 1
+                        continue
 
-                if not msg.media:
-                    no_media += 1
-                    continue
+                    media = getattr(msg, msg.media.value, None)
+                    if not media:
+                        unsupported += 1
+                        continue
 
-                if msg.media not in {
-                    enums.MessageMediaType.VIDEO,
-                    enums.MessageMediaType.AUDIO,
-                    enums.MessageMediaType.DOCUMENT,
-                }:
-                    unsupported += 1
-                    continue
+                    # Skip .txt files
+                    if hasattr(media, 'file_name') and media.file_name and media.file_name.endswith('.txt'):
+                        logger.info(f"⏭️ Skipping .txt file during indexing: {media.file_name}")
+                        unsupported += 1
+                        continue
 
-                media = getattr(msg, msg.media.value, None)
-                if not media:
-                    unsupported += 1
-                    continue
+                    media.file_type = msg.media.value
+                    media.caption = msg.caption
 
-                media.file_type = msg.media.value
-                media.caption = msg.caption
+                    saved, reason, title = await save_file(media, db_type=db_type)
 
-                saved, reason, title = await save_file(media)
+                    if saved:
+                        total += 1
+                        # Mark as announced regardless of DB to prevent future broadcast spam
+                        await announce_title(title)
+                    elif reason == 0:
+                        duplicate += 1
+                    else:
+                        errors += 1
 
-                if saved:
-                    total += 1
-                    if await announce_title(title):
-                        pass
-                elif reason == 0:
-                    duplicate += 1
-                else:
-                    errors += 1
+                # Add small delay after each batch to prevent rate limits
+                await asyncio.sleep(0.25)
 
-        except FloodWait as e:
-            await asyncio.sleep(e.x)
+                # Update progress after each batch
+                elapsed = round(time.time() - start_time, 2)
+                processed = total + duplicate + deleted + no_media + unsupported + errors
+                speed = round(processed / elapsed, 2) if elapsed > 0 else 0
+                progress_percent = round((current / total_target) * 100, 1) if total_target > 0 else 0
+                progress_bar = build_progress_bar(current, total_target)
 
-        except Exception as e:
-            logger.exception(e)
-            await status_msg.edit(f"Error: {e}")
+                remaining_items = max(total_target - current, 0)
+                eta_seconds = round(remaining_items / speed, 2) if speed > 0 else 0
 
-        else:
-            time_taken = round(time.time() - start_time, 2)
-            processed_count = total + duplicate + deleted + no_media + unsupported + errors
-            final_speed = round(processed_count / time_taken, 2) if time_taken > 0 else 0
+                db_name = settings.DATABASE_NAME_INLINE if db_type == "inline" else settings.DATABASE_NAME_PM
+                db_label = "📌 Inline DB" if db_type == "inline" else "💬 PM DB" if db_type == "pm" else "📦 Default DB"
+                try:
+                    await status_msg.edit_text(
+                            f"📦 <b>Indexing in Progress</b> ({db_label})\n\n"
+                            f"<code>{progress_bar}</code> <b>{progress_percent}%</b>\n\n"
+                            "<b>Summary:</b>\n"
+                            f"• 🗄 Database: <code>{db_name}</code>\n"
+                            f"• 📥 Fetched: <code>{current}</code> / <code>{total_target}</code>\n"
+                            f"• ✅ Saved: <code>{total}</code>\n"
+                            f"• ♻️ Duplicates: <code>{duplicate}</code>\n"
+                            f"• 🗑 Deleted: <code>{deleted}</code>\n"
+                            f"• 📄 Non-media: <code>{no_media + unsupported}</code>\n"
+                            f"• ⚠️ Errors: <code>{errors}</code>\n\n"
+                            f"⏱ <b>Time:</b> <code>{elapsed}s</code>\n"
+                            f"⚡ <b>Speed:</b> <code>{speed} files/sec</code>\n"
+                            f"🕒 <b>ETA:</b> <code>{format_eta(eta_seconds)}</code>",
+                            parse_mode=enums.ParseMode.HTML,
+                            reply_markup=InlineKeyboardMarkup(
+                                [[InlineKeyboardButton("Cancel", callback_data="index_cancel", style=enums.ButtonStyle.DANGER)]]
+                            ),
+                        )
+                except Exception:
+                    pass
 
-            await status_msg.edit(
-                "📦 <b>Indexing Complete</b>\n\n"
-                "<b>Summary:</b>\n"
-                f"• ✅ Saved: <code>{total}</code>\n"
-                f"• ♻️ Duplicates: <code>{duplicate}</code>\n"
-                f"• 🗑 Deleted: <code>{deleted}</code>\n"
-                f"• 📄 Non-media: <code>{no_media + unsupported}</code>\n"
-                f"• ⚠️ Errors: <code>{errors}</code>\n\n"
-                f"⏱ <b>Time:</b> <code>{time_taken}s</code>\n"
-                f"⚡ <b>Speed:</b> <code>{final_speed} files/sec</code>",
-                parse_mode=enums.ParseMode.HTML,
-            )
+            except FloodWait as e:
+                wait_time = e.value + 2  # Add buffer to e.value
+                logger.warning(f"FloodWait: Sleeping for {wait_time}s")
+                await asyncio.sleep(wait_time)
+            except Exception as e:
+                logger.exception(f"Error during batch: {e}")
+                errors += 1
+
+        # Final stats reporting
+        time_taken = round(time.time() - start_time, 2)
+        processed_count = total + duplicate + deleted + no_media + unsupported + errors
+        final_speed = round(processed_count / time_taken, 2) if time_taken > 0 else 0
+        db_name = settings.DATABASE_NAME_INLINE if db_type == "inline" else settings.DATABASE_NAME_PM
+        db_label = "📌 Inline DB" if db_type == "inline" else "💬 PM DB" if db_type == "pm" else "📦 Default DB"
+        status_header = "❌ <b>Indexing Cancelled</b>" if RuntimeCache.cancel_index else "✅ <b>Indexing Complete</b>"
+        
+        await status_msg.edit_text(
+            f"{status_header} ({db_label})\n\n"
+            "<b>Summary:</b>\n"
+            f"• 🗄 Database: <code>{db_name}</code>\n"
+            f"• ✅ Saved: <code>{total}</code>\n"
+            f"• ♻️ Duplicates: <code>{duplicate}</code>\n"
+            f"• 🗑 Deleted: <code>{deleted}</code>\n"
+            f"• 📄 Non-media: <code>{no_media + unsupported}</code>\n"
+            f"• ⚠️ Errors: <code>{errors}</code>\n\n"
+            f"⏱ <b>Time:</b> <code>{time_taken}s</code>\n"
+            f"⚡ <b>Speed:</b> <code>{final_speed} files/sec</code>",
+            parse_mode=enums.ParseMode.HTML,
+        )
