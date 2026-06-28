@@ -7,9 +7,10 @@ import aiohttp
 
 from pyrogram import Client, filters, enums
 from pyrogram.types import CallbackQuery
-from pyrogram.types import InlineKeyboardButton, InlineKeyboardMarkup, Message
+from pyrogram.types import InlineKeyboardButton, InlineKeyboardMarkup, Message, KeyboardButton, ReplyKeyboardMarkup
 from pyrogram.errors import PeerIdInvalid, MessageNotModified, QueryIdInvalid
 
+from bot.utils.ott_releases import OTT_RELEASE_CALENDAR
 from bot.config import settings
 from bot.utils.messages import Texts
 from bot.utils.cache import RuntimeCache
@@ -364,12 +365,23 @@ async def delete_file_handler(client: Client, message: Message):
 
 
 async def send_text_start(message: Message, buttons):
+    reply_markup = InlineKeyboardMarkup(buttons)
+    ott_months = list(OTT_RELEASE_CALENDAR.keys())
+    keyboard = []
+    # Create rows with 4 buttons each
+    for i in range(0, len(ott_months), 4):
+        keyboard.append([KeyboardButton(month) for month in ott_months[i:i+4]])
+    reply_keyboard_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
+
+    start_text = Texts.START_TXT.format(
+        message.from_user.mention,
+        RuntimeCache.bot_username,
+    )
+    ott_text = "\n\n🗓️ Tap a month below to explore the OTT release calendar."
+
     await message.reply_text(
-        Texts.START_TXT.format(
-            message.from_user.mention,
-            RuntimeCache.bot_username,
-        ),
-        reply_markup=InlineKeyboardMarkup(buttons),
+        start_text + ott_text,
+        reply_markup=reply_keyboard_markup,
         parse_mode=enums.ParseMode.HTML,
         disable_web_page_preview=True,
     )
@@ -1053,6 +1065,14 @@ async def start_handler(client: Client, message: Message):
             ],
         ]
 
+        ott_months = list(OTT_RELEASE_CALENDAR.keys())
+        keyboard = []
+        # Create rows with 4 buttons each
+        for i in range(0, len(ott_months), 4):
+            keyboard.append([KeyboardButton(month) for month in ott_months[i:i+4]])
+        reply_keyboard_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
+
+
         startup_images = []
         try:
             db_images = await db.get_startup_images()
@@ -1064,27 +1084,35 @@ async def start_handler(client: Client, message: Message):
         except Exception:
             logger.exception("Failed to get startup images from database")
             startup_images = []
+        
+        start_caption = Texts.START_TXT.format(
+            message.from_user.mention,
+            RuntimeCache.bot_username,
+        )
+        ott_text = "\n\n🗓️ Tap a month below to explore the OTT release calendar."
 
-        if not startup_images:
-            return await send_text_start(message, buttons)
-
-        pic_to_use = random.choice(startup_images)
-        logger.info(f"Selected startup image: {pic_to_use[:50]}...")
-
-        try:
+        if startup_images:
+            pic_to_use = random.choice(startup_images)
+            logger.info(f"Selected startup image: {pic_to_use[:50]}...")
             await message.reply_photo(
                 pic_to_use,
-                caption=Texts.START_TXT.format(
-                    message.from_user.mention,
-                    RuntimeCache.bot_username,
-                ),
+                caption=start_caption,
                 reply_markup=InlineKeyboardMarkup(buttons),
                 parse_mode=enums.ParseMode.HTML,
             )
-        except Exception:
-            logger.exception("Failed to send startup image, sending text-only start")
-            await send_text_start(message, buttons)
-
+            await message.reply_text(
+                "🗓️ Tap a month below to explore the OTT release calendar.",
+                reply_markup=reply_keyboard_markup,
+                parse_mode=enums.ParseMode.HTML,
+            )
+        else:
+            # No images, send combined text message
+            await message.reply_text(
+                start_caption + ott_text,
+                reply_markup=reply_keyboard_markup,
+                parse_mode=enums.ParseMode.HTML,
+                disable_web_page_preview=True,
+            )
         return
 
     # AUTH_CHANNEL removed — no forced subscription required

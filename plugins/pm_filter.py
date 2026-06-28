@@ -2,10 +2,10 @@ import asyncio
 import re
 import ast
 import math
-import logging
+import logging 
 
 from pyrogram import Client, filters, enums
-from pyrogram.types import InlineKeyboardMarkup, InlineKeyboardButton, CallbackQuery
+from pyrogram.types import InlineKeyboardMarkup, InlineKeyboardButton, CallbackQuery, Message
 from pyrogram.errors import FloodWait, UserIsBlocked, MessageNotModified, PeerIdInvalid
 from pyrogram.errors.exceptions.bad_request_400 import (
     MediaEmpty,
@@ -14,6 +14,7 @@ from pyrogram.errors.exceptions.bad_request_400 import (
 )
 
 from bot.config import settings
+from bot.utils.ott_releases import OTT_RELEASE_CALENDAR
 
 from database.connections_mdb import (
     active_connection,
@@ -59,6 +60,27 @@ async def group_message_router(client: Client, message):
     handled = await manual_filters(client, message)
     if handled is False:
         await auto_filter(client, message)
+
+
+@Client.on_message(filters.private & filters.text & filters.regex(f"^({'|'.join(OTT_RELEASE_CALENDAR.keys())})$") & filters.incoming)
+async def ott_release_handler(client: Client, message: Message):
+    """Sends the pre-configured OTT release calendar for the selected month."""
+    month = message.text
+    calendar_text = OTT_RELEASE_CALENDAR.get(month)
+
+    if not calendar_text:
+        await message.reply("Sorry, the calendar for that month is not available.")
+        return
+
+    try:
+        await message.reply_text(
+            text=calendar_text,
+            parse_mode=enums.ParseMode.HTML,
+            disable_web_page_preview=True,
+        )
+    except Exception as e:
+        logger.exception(f"Failed to send {month} OTT release text.")
+        await message.reply("Sorry, I couldn't retrieve the calendar at the moment.")
 
 
 # ---------------- PRIVATE MESSAGE HANDLER ---------------- #
