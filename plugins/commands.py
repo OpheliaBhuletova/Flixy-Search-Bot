@@ -39,6 +39,19 @@ async def botapi_send_message(token: str, chat_id: int, text: str) -> None:
                 raise RuntimeError(data)
 
 
+async def _notify_request_processed(client: Client, requester_id: int) -> bool:
+    try:
+        await client.send_message(
+            requester_id,
+            "✅ <b>Your request has been processed.</b>\n"
+            "Files have been added to the database. Please check.",
+            parse_mode=enums.ParseMode.HTML,
+        )
+        return True
+    except Exception:
+        return False
+
+
 def extract_tg_post_id(text: str) -> int | None:
     if not text:
         return None
@@ -179,6 +192,105 @@ async def delete_file_command(client: Client, message: Message):
         logger.info(f"Admin {message.from_user.id} deleted file {db_file_id} from database.")
     else:
         await message.reply("❌ <b>File not found in database or failed to delete.</b>", parse_mode=enums.ParseMode.HTML)
+
+
+@Client.on_message((filters.private | filters.group) & filters.command("request"))
+async def request_command_handler(client: Client, message: Message):
+    request_text = None
+
+    if len(message.command) > 1:
+        request_text = " ".join(message.command[1:]).strip()
+
+    if not request_text and message.reply_to_message:
+        request_text = message.reply_to_message.text or message.reply_to_message.caption
+        request_text = request_text.strip() if request_text else None
+
+    if not request_text:
+        return await message.reply(
+            "❌ Usage: /request <movie name>\n"
+            "Or reply to a message with /request to forward that text."
+        )
+
+    request_text = request_text[:1000]
+    user = message.from_user
+    user_link = f"<a href='tg://user?id={user.id}'>{html.escape(user.first_name or str(user.id))}</a>"
+    username_str = f" (@{user.username})" if user.username else ""
+    chat_label = "Private Message" if message.chat.type == enums.ChatType.PRIVATE else f"Group: {html.escape(message.chat.title or str(message.chat.id))}"
+
+    log_channel = getattr(settings, "LOG_CHANNEL", 0)
+    if not log_channel:
+        await message.reply(
+            "✅ Request received, but LOG_CHANNEL is not configured."
+        )
+        return
+
+    callback_data = f"request_done#{user.id}#{message.chat.id}#{message.id}"
+    buttons = [
+        [
+            InlineKeyboardButton(
+                "✅ Confirm added to DB",
+                callback_data=callback_data,
+                style=enums.ButtonStyle.SUCCESS,
+            )
+        ],
+    ]
+
+    log_text = (
+        f"<b>🎬 Request</b>\n\n"
+        f"<b>User:</b> {user_link}{username_str}\n"
+        f"<b>User ID:</b> <code>{user.id}</code>\n"
+        f"<b>Source:</b> {chat_label}\n"
+        f"<b>Request:</b> <pre>{html.escape(request_text)}</pre>"
+    )
+
+    try:
+        await client.send_message(
+            log_channel,
+            log_text,
+            parse_mode=enums.ParseMode.HTML,
+            reply_markup=InlineKeyboardMarkup(buttons),
+        )
+    except Exception as e:
+        logger.exception(f"Failed to send request to LOG_CHANNEL: {e}")
+        await message.reply("❌ Failed to forward your request. Please try again later.")
+        return
+
+    await message.reply("✅ Your request has been sent to the admin logs.")
+
+
+@Client.on_callback_query(filters.regex(r"^request_done#"))
+async def request_done_callback(client: Client, query: CallbackQuery):
+    if query.from_user.id not in settings.ADMINS:
+        return await query.answer("Only admins can confirm requests.", show_alert=True)
+
+    parts = query.data.split("#")
+    if len(parts) != 4:
+        return await query.answer("Invalid request callback.", show_alert=True)
+
+    try:
+        requester_id = int(parts[1])
+    except ValueError:
+        return await query.answer("Invalid requester ID.", show_alert=True)
+
+    succeeded = await _notify_request_processed(client, requester_id)
+    if succeeded:
+        await query.answer("Requester notified.")
+        try:
+            await query.message.edit_text(
+                query.message.text + "\n\n✅ <b>Request processed by admin.</b>",
+                parse_mode=enums.ParseMode.HTML,
+            )
+        except Exception:
+            pass
+    else:
+        await query.answer("Could not message the requester.", show_alert=True)
+        try:
+            await query.message.edit_text(
+                query.message.text + "\n\n⚠️ <b>Could not notify requester.</b>",
+                parse_mode=enums.ParseMode.HTML,
+            )
+        except Exception:
+            pass
 
 @Client.on_message(filters.command("setstartup") & filters.private)
 async def set_startup_image(client: Client, message: Message):

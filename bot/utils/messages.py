@@ -29,8 +29,7 @@ Choose a category below to explore available commands 👇
 • Type any movie name in any chat using inline mode:
   `@{} <movie name>`
 
-• Private `/search` or `/imdb` requests are available **only to sudo
-  users or admins**; normal users should use inline mode instead.
+• Private `/search` or `/imdb` requests are available to all users.
 """
 
     HELP_FILTERS_TXT = """

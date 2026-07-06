@@ -5,7 +5,7 @@
 <h1>Flixy Search Bot</h1>
 
 <p>
-  A modern, fast, and fully backward-compatible Telegram file search bot  
+  A modern, fast, and fully backward-compatible Telegram file search bot
   built with the latest Pyrogram and Python.
 </p>
 
@@ -13,55 +13,90 @@
 
 ## 📌 About
 
-**Flixy Search Bot** is a Telegram file search bot that helps users quickly find and retrieve indexed files directly from Telegram using simple commands.
+**Flixy Search Bot** is a Telegram file search bot that helps users find and retrieve indexed files directly from Telegram using inline search, private message search, and admin tools.
 
 This project is a **modernized continuation** of the original search bot, upgraded to:
 - **Pyrogram v2 (async-first)**
 - **Python 3.11+**
 - **Async MongoDB (Motor)**
-- Cleaner structure and production-ready infrastructure
+- Clear modular plugin structure for easier maintenance and extension
 
-All existing commands and user-facing behavior are preserved, ensuring **full backward compatibility** while making the codebase easier to maintain and extend.
-
----
-
-## ✨ Features
-
-- 🔍 Fast file searching in indexed channels
-- 📂 Instant file retrieval via inline and command-based search
-- ⚡ Async architecture for better performance
-- 🧩 Plugin-based modular structure
-- 🛡 Admin-only controls for indexing and maintenance
-- 👑 **Sudo users** can bypass subscription/bans and always receive PM search responses
-- 🎬 Automatic broadcast when a new movie title is indexed (no duplicates)
-- 🗃 MongoDB-backed persistent storage
-- 🚀 Ready for modern deployment (Docker-friendly)
+This version adds dedicated support for separate movie and series workflows while preserving the original user experience.
 
 ---
 
-### 🛠 Access Levels
+## ✨ Core Features
 
-- **Admin users** – full bot access, including PM movie replies and all admin commands.
-- **Sudo users** – inline search like normal users plus private movie responses; also exempt from bans/subscription checks.
-- **Normal users** – unrestricted inline search with no extra permissions.
+- 🎬 **Inline search for movies** using a dedicated inline movie database
+- 📺 **Private message search for TV series** with a separate PM/series database
+- 📌 **Dedicated movies and series channels** via `MOVIES_CHANNELS` and `SERIES_CHANNELS`
+- 🧠 **TV series watchlist support** — users can add series and receive new episode notifications
+- 🔍 **TMDb metadata search** through `/imdb` and `/imdbinfo`
+- 🧩 **Plugin-based architecture** for clean separation of features
+- 🛡 **Admin controls** for indexing, deleting, and database management
+- ✅ **Persistent MongoDB storage** with async access via Motor
+- 🚀 **Docker-friendly deployment** with modern production readiness
 
 ---
 
-## 🤖 Available Commands
+## 🔁 Inline vs PM Search
 
-### User Commands
-- `/start` – Start the bot and see the welcome message
-- `/help` – Get information about how to use the bot (opens an interactive menu with categorized commands)
-- `/search <query>` – Search for files by name
-- `/ping` – Check if the bot is alive
+- **Inline search** is primarily used for **movies** and searches the `inline` movie database.
+- **Private chat search** is used for **series** and searches the `pm` series database.
+- PM search is available to all users, so anyone can search series in a private chat.
+- This dual-database setup keeps movie and TV series search results separated and optimized for each use case.
 
-### Admin Commands
-- `/index` – Index files from a channel
-- `/stats` – View bot statistics
-- `/broadcast` – Send a message to all users
-- `/restart` – Restart the bot (if enabled)
+---
 
-> ⚠️ Command names and behavior are kept identical to the original implementation.
+## 🛠 Access Levels
+
+- **Admin users** — full bot access, including PM/series replies, indexing, filter management, and admin-only commands.
+- **Sudo users** — inline search, private search access, and bypass bans/subscription checks.
+- **Normal users** — unrestricted inline movie search, private search access in PM, and access to public help text.
+
+---
+
+## 🤖 Key Commands
+
+### General Commands
+- `/start` — Start the bot and see the welcome message
+- `/help` — Open the interactive help menu
+- `/search <query>` — Search files by name
+- `/ping` — Check bot availability
+
+### Metadata and Discovery
+- `/imdb <query>` — Search TMDb for movies or TV shows
+- `/imdbinfo <query|tmdb_id>` — Fetch TMDb metadata by name or ID
+
+### Watchlist and Series
+- `/addwatchlist <TV series name>` — Add a TV series to your watchlist
+- `/mywatchlist` — View your saved TV series
+- Watchlist notifications are triggered when new episodes are indexed
+
+### Group and Filter Management
+- `/connect <group_id>` — Link a group to your PM session
+- `/disconnect` — Unlink a connected group
+- `/connections` — List connected groups
+- `/filter <keyword>` — Save a filter in a connected group
+- `/filters` or `/viewfilters` — List active filters
+- `/delete <keyword>` or `/del <keyword>` — Remove a filter
+- `/delall` — Remove all filters from a group
+
+### Admin Tools
+- `/genid` — Extract a file ID from replied media
+- `/delete <file_id>` — Delete a file from the database
+- `/setstartup` — Set the bot startup image from a photo
+- `/recentfiles [movies|series|both] [limit]` — Show recently indexed files
+- `/dbstats` — Show movies and series database statistics
+
+---
+
+## 🧠 Technical Notes
+
+- The bot uses two separate MongoDB clusters for movie and PM search data when configured with `DATABASE_URL_INLINE` and `DATABASE_URL_PM`.
+- `MOVIES_CHANNELS` are saved to the inline movie database.
+- `SERIES_CHANNELS` are saved to the PM/series database.
+- PM file deliveries are sent as cached media and include an automated cleanup reminder.
 
 ---
 
@@ -70,7 +105,7 @@ All existing commands and user-facing behavior are preserved, ensuring **full ba
 - **Language:** Python 3.11+
 - **Framework:** Pyrogram v2
 - **Database:** MongoDB (Motor – async)
-- **Deployment:** Docker / VPS / Cloud platforms
+- **Deployment:** Docker / Koyeb / VPS / Cloud platforms
 
 ---
 
@@ -81,5 +116,5 @@ This project is open-source and available under the MIT License.
 ---
 
 <p align="center">
-  Made with ❤️ by <b>Popzy Bots</b>
+  Made with ❤️ by <b>Flixy Bots</b>
 </p>
