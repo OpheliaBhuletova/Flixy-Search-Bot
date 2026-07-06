@@ -39,12 +39,16 @@ async def botapi_send_message(token: str, chat_id: int, text: str) -> None:
                 raise RuntimeError(data)
 
 
-async def _notify_request_processed(client: Client, requester_id: int) -> bool:
+async def _notify_request_processed(client: Client, requester_id: int, message_text: str | None = None) -> bool:
+    if message_text is None:
+        message_text = (
+            "✅ <b>Your request has been processed.</b>\n"
+            "Files have been added to the database. Please check."
+        )
     try:
         await client.send_message(
             requester_id,
-            "✅ <b>Your request has been processed.</b>\n"
-            "Files have been added to the database. Please check.",
+            message_text,
             parse_mode=enums.ParseMode.HTML,
         )
         return True
@@ -225,12 +229,18 @@ async def request_command_handler(client: Client, message: Message):
         return
 
     callback_data = f"request_done#{user.id}#{message.chat.id}#{message.id}"
+    cancel_data = f"request_cancel#{user.id}#{message.chat.id}#{message.id}"
     buttons = [
         [
             InlineKeyboardButton(
                 "✅ Confirm added to DB",
                 callback_data=callback_data,
-                style=enums.ButtonStyle.SUCCESS,
+            )
+        ],
+        [
+            InlineKeyboardButton(
+                "❌ Already in DB",
+                callback_data=cancel_data,
             )
         ],
     ]
@@ -255,7 +265,7 @@ async def request_command_handler(client: Client, message: Message):
         await message.reply("❌ Failed to forward your request. Please try again later.")
         return
 
-    await message.reply("✅ Your request has been sent to the admin logs.")
+    await message.reply("📩 Your request has been sent to the admin logs.")
 
 
 @Client.on_callback_query(filters.regex(r"^request_done#"))
@@ -291,6 +301,46 @@ async def request_done_callback(client: Client, query: CallbackQuery):
             )
         except Exception:
             pass
+
+
+@Client.on_callback_query(filters.regex(r"^request_cancel#"))
+async def request_cancel_callback(client: Client, query: CallbackQuery):
+    if query.from_user.id not in settings.ADMINS:
+        return await query.answer("Only admins can cancel requests.", show_alert=True)
+
+    parts = query.data.split("#")
+    if len(parts) != 4:
+        return await query.answer("Invalid request callback.", show_alert=True)
+
+    try:
+        requester_id = int(parts[1])
+    except ValueError:
+        return await query.answer("Invalid requester ID.", show_alert=True)
+
+    message_text = (
+        "❌ <b>File is already available in the DB.</b>\n"
+        "Please check 🙂"
+    )
+    succeeded = await _notify_request_processed(client, requester_id, message_text)
+    if succeeded:
+        await query.answer("Requester notified.")
+        try:
+            await query.message.edit_text(
+                query.message.text + "\n\n❌ <b>Checked DB and notified requester.</b>",
+                parse_mode=enums.ParseMode.HTML,
+            )
+        except Exception:
+            pass
+    else:
+        await query.answer("Could not message the requester.", show_alert=True)
+        try:
+            await query.message.edit_text(
+                query.message.text + "\n\n⚠️ <b>Could not notify requester.</b>",
+                parse_mode=enums.ParseMode.HTML,
+            )
+        except Exception:
+            pass
+
 
 @Client.on_message(filters.command("setstartup") & filters.private)
 async def set_startup_image(client: Client, message: Message):

@@ -30,6 +30,7 @@ Choose a category below to explore available commands 👇
   `@{} <movie name>`
 
 • Private `/search` or `/imdb` requests are available to all users.
+• Use `/request <movie name>` in PM or a group to send a request to admin logs.
 """
 
     HELP_FILTERS_TXT = """
