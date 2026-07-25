@@ -6,7 +6,6 @@ import logging
 
 from pyrogram import Client, filters, enums
 from pyrogram.types import (
-    InlineKeyboardMarkup,
     InlineKeyboardButton,
     CallbackQuery,
     Message,
@@ -21,6 +20,7 @@ from pyrogram.errors.exceptions.bad_request_400 import (
 
 from bot.config import settings
 from bot.utils.cache import RuntimeCache
+from bot.utils.helpers import build_cancel_button_row, build_inline_markup
 from database.ia_filterdb import save_file, save_file_inline, save_file_pm, announce_title
 from bot.utils.broadcast import new_movie_broadcast
 
@@ -67,8 +67,7 @@ async def index_callback_handler(client: Client, query: CallbackQuery):
         
         await query.message.edit(
             f"Starting indexing to {db_type.upper()} database...",
-            reply_markup=InlineKeyboardMarkup(
-                    [[InlineKeyboardButton("Cancel", callback_data="index_cancel", style=enums.ButtonStyle.DANGER)]]))
+            reply_markup=build_inline_markup(build_cancel_button_row()))
         
         try:
             chat = int(chat)
@@ -124,15 +123,14 @@ async def index_callback_handler(client: Client, query: CallbackQuery):
         ]
         return await query.message.edit(
             f"Select target database for indexing `{chat}`:",
-            reply_markup=InlineKeyboardMarkup(db_buttons),
+            reply_markup=build_inline_markup(db_buttons),
         )
     else:
         # Multi-DB disabled, proceed with default
         await query.answer("Processing... ⏳", show_alert=True)
         await query.message.edit(
             "Starting indexing...",
-            reply_markup=InlineKeyboardMarkup(
-                    [[InlineKeyboardButton("Cancel", callback_data="index_cancel", style=enums.ButtonStyle.DANGER)]]))
+            reply_markup=build_inline_markup(build_cancel_button_row()))
         try:
             chat = int(chat)
         except ValueError:
@@ -197,7 +195,7 @@ async def send_for_index(client: Client, message: Message):
             f"Do you want to index this chat?\n\n"
             f"Chat: <code>{chat_id}</code>\n"
             f"Last Message ID: <code>{last_msg_id}</code>",
-            reply_markup=InlineKeyboardMarkup(buttons),
+            reply_markup=build_inline_markup(buttons),
         )
 
     # Send to moderators
@@ -235,7 +233,7 @@ async def send_for_index(client: Client, message: Message):
         f"Chat: <code>{chat_id}</code>\n"
         f"Last Message ID: <code>{last_msg_id}</code>\n"
         f"Invite: {link}",
-        reply_markup=InlineKeyboardMarkup(buttons),
+        reply_markup=build_inline_markup(buttons),
     )
 
     await message.reply(
@@ -360,24 +358,22 @@ async def index_files_to_db(
                 db_label = "📌 Inline DB" if db_type == "inline" else "💬 PM DB" if db_type == "pm" else "📦 Default DB"
                 try:
                     await status_msg.edit_text(
-                            f"📦 <b>Indexing in Progress</b> ({db_label})\n\n"
-                            f"<code>{progress_bar}</code> <b>{progress_percent}%</b>\n\n"
-                            "<b>Summary:</b>\n"
-                            f"• 🗄 Database: <code>{db_name}</code>\n"
-                            f"• 📥 Fetched: <code>{current}</code> / <code>{total_target}</code>\n"
-                            f"• ✅ Saved: <code>{total}</code>\n"
-                            f"• ♻️ Duplicates: <code>{duplicate}</code>\n"
-                            f"• 🗑 Deleted: <code>{deleted}</code>\n"
-                            f"• 📄 Non-media: <code>{no_media + unsupported}</code>\n"
-                            f"• ⚠️ Errors: <code>{errors}</code>\n\n"
-                            f"⏱ <b>Time:</b> <code>{elapsed}s</code>\n"
-                            f"⚡ <b>Speed:</b> <code>{speed} files/sec</code>\n"
-                            f"🕒 <b>ETA:</b> <code>{format_eta(eta_seconds)}</code>",
-                            parse_mode=enums.ParseMode.HTML,
-                            reply_markup=InlineKeyboardMarkup(
-                                [[InlineKeyboardButton("Cancel", callback_data="index_cancel", style=enums.ButtonStyle.DANGER)]]
-                            ),
-                        )
+                        f"📦 <b>Indexing in Progress</b> ({db_label})\n\n"
+                        f"<code>{progress_bar}</code> <b>{progress_percent}%</b>\n\n"
+                        "<b>Summary:</b>\n"
+                        f"• 🗄 Database: <code>{db_name}</code>\n"
+                        f"• 📥 Fetched: <code>{current}</code> / <code>{total_target}</code>\n"
+                        f"• ✅ Saved: <code>{total}</code>\n"
+                        f"• ♻️ Duplicates: <code>{duplicate}</code>\n"
+                        f"• 🗑 Deleted: <code>{deleted}</code>\n"
+                        f"• 📄 Non-media: <code>{no_media + unsupported}</code>\n"
+                        f"• ⚠️ Errors: <code>{errors}</code>\n\n"
+                        f"⏱ <b>Time:</b> <code>{elapsed}s</code>\n"
+                        f"⚡ <b>Speed:</b> <code>{speed} files/sec</code>\n"
+                        f"🕒 <b>ETA:</b> <code>{format_eta(eta_seconds)}</code>",
+                        parse_mode=enums.ParseMode.HTML,
+                        reply_markup=build_inline_markup(build_cancel_button_row()),
+                    )
                 except Exception:
                     pass
 

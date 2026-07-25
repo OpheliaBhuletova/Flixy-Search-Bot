@@ -1,5 +1,4 @@
 import os
-import html
 import logging
 import random
 from datetime import datetime
@@ -7,22 +6,18 @@ import asyncio
 
 from pyrogram import Client, filters, enums
 from database.users_chats_db import db
-from pyrogram.types import (
-    InlineKeyboardMarkup,
-    InlineKeyboardButton,
-    CallbackQuery,
-    Message,
-    InputMediaPhoto,
-)
-from pyrogram.errors.exceptions.bad_request_400 import (
-    UserNotParticipant,
-    MediaEmpty,
-    PhotoInvalidDimensions,
-    WebpageMediaEmpty,
-)
+from pyrogram.types import InlineKeyboardButton, CallbackQuery, Message
+from pyrogram.errors.exceptions.bad_request_400 import UserNotParticipant, MediaEmpty, PhotoInvalidDimensions, WebpageMediaEmpty
 
 from bot.config import settings
-from bot.utils.helpers import extract_user, get_file_id, schedule_delete_message
+from bot.utils.helpers import (
+    build_close_button_row,
+    build_inline_markup,
+    build_start_buttons,
+    extract_user,
+    get_file_id,
+    schedule_delete_message,
+)
 from bot.utils.cache import RuntimeCache
 from bot.utils.messages import Texts
 from bot.services.metadata_service import get_imdb_info, get_poster, search_tmdb_titles
@@ -116,7 +111,7 @@ async def user_info_handler(client: Client, message):
             pass
 
     buttons = [[InlineKeyboardButton("🔐 Close", callback_data="close_data", style=enums.ButtonStyle.DANGER)]]
-    markup = InlineKeyboardMarkup(buttons)
+    markup = build_inline_markup(buttons)
 
     if user.photo:
         path = await client.download_media(user.photo.big_file_id)
@@ -232,7 +227,7 @@ async def imdb_search_handler(client: Client, message: Message):
 
     await message.reply(
         "Here is what I found:",
-        reply_markup=InlineKeyboardMarkup(buttons),
+        reply_markup=build_inline_markup(buttons),
     )
     await status_msg.delete()
 
@@ -254,26 +249,8 @@ async def imdb_info_handler(client: Client, message: Message):
     # Draft setup
     draft_id = 1
 
-    # Initial draft message
     await client.send_message_draft(
-        chat_id=message.chat.id,
-        draft_id=draft_id,
-        text="🔍 Fetching metadata..."
-    )
-
-    # Optional streaming effect
-    await asyncio.sleep(0.4)
-    await client.send_message_draft(
-        chat_id=message.chat.id,
-        draft_id=draft_id,
-        text="🔍 Fetching metadata.."
-    )
-
-    await asyncio.sleep(0.4)
-    await client.send_message_draft(
-        chat_id=message.chat.id,
-        draft_id=draft_id,
-        text="🔍 Fetching metadata..."
+        chat_id=message.chat.id, draft_id=draft_id, text="🔍 Fetching metadata..."
     )
 
     imdb = await get_imdb_info(query)
@@ -352,7 +329,7 @@ async def imdb_callback_handler(client: Client, callback: CallbackQuery):
 
     caption = settings.METADATA_TEMPLATE.format(**imdb, query=imdb["title"])
     buttons = [[InlineKeyboardButton(imdb["title"], url=imdb["url"], style=enums.ButtonStyle.SUCCESS)]]
-    markup = InlineKeyboardMarkup(buttons)
+    markup = build_inline_markup(buttons)
 
     # Check if poster exists and is valid
     poster = imdb.get("poster")
@@ -412,16 +389,7 @@ async def help_about_callback_handler(client: Client, callback: CallbackQuery):
 
     # initial menu or category selection
     if data == "start":
-        buttons = [
-            [
-                InlineKeyboardButton("🔍 Search", switch_inline_query_current_chat="", style=enums.ButtonStyle.SUCCESS),
-                InlineKeyboardButton("👀 Watchlist", callback_data="mywatchlist_start", style=enums.ButtonStyle.PRIMARY),
-            ],
-            [
-                InlineKeyboardButton("ℹ️ About", callback_data="about", style=enums.ButtonStyle.PRIMARY),
-                InlineKeyboardButton("📖 Help", callback_data="help", style=enums.ButtonStyle.DANGER),
-            ],
-        ]
+        buttons = build_start_buttons()
 
         caption = Texts.START_TXT.format(
             callback.from_user.mention,
@@ -444,13 +412,13 @@ async def help_about_callback_handler(client: Client, callback: CallbackQuery):
                         caption=caption,
                         parse_mode=enums.ParseMode.HTML,
                     ),
-                    reply_markup=InlineKeyboardMarkup(buttons),
+                    reply_markup=build_inline_markup(buttons),
                 )
             except Exception:
                 try:
                     await callback.message.edit_text(
                         caption,
-                        reply_markup=InlineKeyboardMarkup(buttons),
+                        reply_markup=build_inline_markup(buttons),
                         parse_mode=enums.ParseMode.HTML,
                         disable_web_page_preview=True,
                     )
@@ -458,21 +426,21 @@ async def help_about_callback_handler(client: Client, callback: CallbackQuery):
                     await callback.message.reply_photo(
                         file_id,
                         caption=caption,
-                        reply_markup=InlineKeyboardMarkup(buttons),
+                        reply_markup=build_inline_markup(buttons),
                         parse_mode=enums.ParseMode.HTML,
                     )
         else:
             try:
                 await callback.message.edit_text(
                     caption,
-                    reply_markup=InlineKeyboardMarkup(buttons),
+                    reply_markup=build_inline_markup(buttons),
                     parse_mode=enums.ParseMode.HTML,
                     disable_web_page_preview=True,
                 )
             except Exception:
                 await callback.message.reply_text(
                     caption,
-                    reply_markup=InlineKeyboardMarkup(buttons),
+                    reply_markup=build_inline_markup(buttons),
                     parse_mode=enums.ParseMode.HTML,
                     disable_web_page_preview=True,
                 )
@@ -492,20 +460,14 @@ async def help_about_callback_handler(client: Client, callback: CallbackQuery):
                 InlineKeyboardButton("🔑 Admin", callback_data="cat_admin", style=enums.ButtonStyle.DANGER),
                 InlineKeyboardButton("🔗 Connections", callback_data="cat_connections", style=enums.ButtonStyle.PRIMARY),
             ],
-            [
-                InlineKeyboardButton("◀️ Back", callback_data="start", style=enums.ButtonStyle.PRIMARY),
-                InlineKeyboardButton("❌ Close", callback_data="close_data", style=enums.ButtonStyle.DANGER),
-            ],
+            build_close_button_row("start"),
         ]
     elif data == "about":  # about
         text = Texts.ABOUT_TXT.format(
             client.me.first_name if client.me else "Bot"
         )
         parse_mode = enums.ParseMode.HTML
-        buttons = [[
-            InlineKeyboardButton("◀️ Back", callback_data="start", style=enums.ButtonStyle.PRIMARY),
-            InlineKeyboardButton("❌ Close", callback_data="close_data", style=enums.ButtonStyle.DANGER),
-        ]]
+        buttons = [build_close_button_row("start")]
     elif data.startswith("cat_"):
         cat = data.split("_", 1)[1]
         if cat == "admin":
@@ -521,7 +483,7 @@ async def help_about_callback_handler(client: Client, callback: CallbackQuery):
     else:
         return
 
-    markup = InlineKeyboardMarkup(buttons)
+    markup = build_inline_markup(buttons)
 
     try:
         await callback.message.edit_text(

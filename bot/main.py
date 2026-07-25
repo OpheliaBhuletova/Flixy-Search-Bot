@@ -2,8 +2,10 @@ import asyncio
 import logging
 import logging.config
 import os
+import sys
 import time
 from datetime import datetime
+from pathlib import Path
 from typing import AsyncGenerator, Optional, Union
 
 import aiohttp
@@ -11,10 +13,14 @@ from aiohttp import web
 from pyrogram import Client, __version__, idle, enums
 from pyrogram.errors import FloodWait, PeerIdInvalid
 
+ROOT_DIR = Path(__file__).resolve().parent.parent
+if str(ROOT_DIR) not in sys.path:
+    sys.path.insert(0, str(ROOT_DIR))
+
 from bot.config import LOG_STR, settings
 from bot.utils.cache import RuntimeCache
-from bot.utils.helpers import schedule_delete_message
-from pyrogram.types import InlineKeyboardButton, InlineKeyboardMarkup
+from bot.utils.helpers import build_inline_markup, schedule_delete_message
+from pyrogram.types import InlineKeyboardButton
 from database.ia_filterdb import Media
 from database.users_chats_db import get_db_instance
 from plugins import web_server
@@ -254,7 +260,7 @@ class Bot(Client):
                                     "🎬 Movies & Series in Seconds\n\n"
                                     "No complicated steps. Just type and get what you want.\n\n"
                                 )
-                                buttons = InlineKeyboardMarkup(
+                                buttons = build_inline_markup(
                                     [[InlineKeyboardButton("Try Flixy", url=f"https://t.me/{RuntimeCache.bot_username}", style=enums.ButtonStyle.PRIMARY)]]
                                 )
                                 sent = await app.send_message(

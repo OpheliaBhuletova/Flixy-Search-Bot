@@ -4,7 +4,6 @@ from datetime import datetime, timezone
 from pyrogram import Client, enums
 from pyrogram.types import (
     InlineKeyboardButton,
-    InlineKeyboardMarkup,
     InlineQueryResultCachedDocument,
     InlineQuery,
 )
@@ -12,7 +11,7 @@ from pyrogram.errors.exceptions.bad_request_400 import QueryIdInvalid
 
 from bot.config import settings
 from bot.utils.cache import RuntimeCache
-from bot.utils.helpers import get_size, remove_file_extension
+from bot.utils.helpers import build_inline_markup, get_size, remove_file_extension
 from database.ia_filterdb import get_inline_search_results_with_fallback
 
 logger = logging.getLogger(__name__)
@@ -51,12 +50,12 @@ async def inline_query_handler(client: Client, query: InlineQuery):
 
     now_date = datetime.now(timezone.utc).date()
 
-    reply_markup = InlineKeyboardMarkup(
+    reply_markup = build_inline_markup(
         [[
             InlineKeyboardButton(
-                text=" Search Again", 
+                text=" Search Again",
                 switch_inline_query_current_chat=keyword,
-                style=enums.ButtonStyle.SUCCESS
+                style=enums.ButtonStyle.SUCCESS,
             )
         ]]
     )

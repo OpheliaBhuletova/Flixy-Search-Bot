@@ -1,9 +1,10 @@
 import logging
 
 from pyrogram import Client, filters, enums
-from pyrogram.types import InlineKeyboardButton, InlineKeyboardMarkup, Message
+from pyrogram.types import InlineKeyboardButton, Message
 
 from bot.config import settings
+from bot.utils.helpers import build_inline_markup
 from database.connections_mdb import (
     add_connection,
     all_connections,
@@ -210,7 +211,7 @@ async def connections_handler(client: Client, message: Message):
     if buttons:
         await message.reply_text(
             "Your connected groups:\n\n",
-            reply_markup=InlineKeyboardMarkup(buttons),
+            reply_markup=build_inline_markup(buttons),
             quote=True,
         )
     else:

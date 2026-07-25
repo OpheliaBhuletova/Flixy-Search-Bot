@@ -4,13 +4,75 @@ from typing import Union, Optional
 import re
 
 from pyrogram import enums
-from pyrogram.types import Message
+from pyrogram.types import InlineKeyboardButton, InlineKeyboardMarkup, Message
 from pyrogram.errors import UserNotParticipant
 
 from bot.config import settings
 from database.users_chats_db import get_db_instance
 
 logger = logging.getLogger(__name__)
+
+
+def build_button(
+    text: str,
+    callback_data: str | None = None,
+    url: str | None = None,
+    style: enums.ButtonStyle | None = None,
+    switch_inline_query_current_chat: str | None = None,
+) -> InlineKeyboardButton:
+    """Create an inline button while keeping the common kwargs centralized."""
+    kwargs = {}
+    if callback_data is not None:
+        kwargs["callback_data"] = callback_data
+    if url is not None:
+        kwargs["url"] = url
+    if switch_inline_query_current_chat is not None:
+        kwargs["switch_inline_query_current_chat"] = switch_inline_query_current_chat
+    if style is not None:
+        kwargs["style"] = style
+    return InlineKeyboardButton(text, **kwargs)
+
+
+def build_inline_markup(buttons: list[list[InlineKeyboardButton]] | None = None) -> InlineKeyboardMarkup:
+    """Wrap a button matrix into an InlineKeyboardMarkup object."""
+    if buttons is None:
+        buttons = []
+    return InlineKeyboardMarkup(buttons)
+
+
+def build_support_button_row(support_chat: str | None = None) -> list[list[InlineKeyboardButton]]:
+    """Build the common support button row for restricted or leave notifications."""
+    chat = support_chat or getattr(settings, "SUPPORT_CHAT", "")
+    if chat:
+        return [[build_button("Support", url=f"https://t.me/{chat}", style=enums.ButtonStyle.SUCCESS)]]
+    return [[build_button("Support", callback_data="close_data", style=enums.ButtonStyle.SUCCESS)]]
+
+
+def build_cancel_button_row(callback_data: str = "index_cancel") -> list[list[InlineKeyboardButton]]:
+    """Build a single cancel button row for index operations."""
+    return [[build_button("Cancel", callback_data=callback_data, style=enums.ButtonStyle.DANGER)]]
+
+
+def build_close_button_row(back_callback: str = "start") -> list[InlineKeyboardButton]:
+    """Build a typical back/close row used across help/about menus."""
+    return [
+        build_button("◀️ Back", callback_data=back_callback, style=enums.ButtonStyle.PRIMARY),
+        build_button("❌ Close", callback_data="close_data", style=enums.ButtonStyle.DANGER),
+    ]
+
+
+def build_start_buttons() -> list[list[InlineKeyboardButton]]:
+    """Build the common start menu with search and watchlist actions."""
+    return [
+        [
+            build_button("🔍 Search", switch_inline_query_current_chat="", style=enums.ButtonStyle.SUCCESS),
+            build_button("👀 Watchlist", callback_data="mywatchlist_start", style=enums.ButtonStyle.PRIMARY),
+        ],
+        [
+            build_button("ℹ️ About", callback_data="about", style=enums.ButtonStyle.PRIMARY),
+            build_button("📖 Help", callback_data="help", style=enums.ButtonStyle.DANGER),
+        ],
+    ]
 
 
 def get_size(size: int | float) -> str:

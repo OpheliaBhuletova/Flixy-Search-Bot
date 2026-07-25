@@ -6,19 +6,22 @@ import html
 import aiohttp
 
 from pyrogram import Client, filters, enums
-from pyrogram.types import CallbackQuery
-from pyrogram.types import InlineKeyboardButton, InlineKeyboardMarkup, Message
+from pyrogram.types import CallbackQuery, InlineKeyboardButton, KeyboardButton, ReplyKeyboardMarkup, Message
 from pyrogram.errors import PeerIdInvalid, MessageNotModified, QueryIdInvalid
 
+from bot.utils.ott_releases import OTT_RELEASE_CALENDAR
 from bot.config import settings
 from bot.utils.messages import Texts
 from bot.utils.cache import RuntimeCache
-from bot.utils.helpers import get_file_id
+from bot.utils.helpers import (
+    build_close_button_row,
+    build_inline_markup,
+    build_start_buttons,
+    get_file_id,
+)
 from bot.services.metadata_service import get_imdb_info, search_tmdb_titles
-from database.ia_filterdb import delete_file_by_id, unpack_new_file_id
-
+from database.ia_filterdb import delete_file_by_id, delete_file as db_delete_file, unpack_new_file_id
 from database.users_chats_db import db
-from database.ia_filterdb import delete_file as db_delete_file, unpack_new_file_id
 
 logger = logging.getLogger(__name__)
 
@@ -36,6 +39,23 @@ async def botapi_send_message(token: str, chat_id: int, text: str) -> None:
             data = await resp.json()
             if not data.get("ok"):
                 raise RuntimeError(data)
+
+
+async def _notify_request_processed(client: Client, requester_id: int, message_text: str | None = None) -> bool:
+    if message_text is None:
+        message_text = (
+            "✅ <b>Your request has been processed.</b>\n"
+            "Files have been added to the database. Please check."
+        )
+    try:
+        await client.send_message(
+            requester_id,
+            message_text,
+            parse_mode=enums.ParseMode.HTML,
+        )
+        return True
+    except Exception:
+        return False
 
 
 def extract_tg_post_id(text: str) -> int | None:
@@ -178,6 +198,151 @@ async def delete_file_command(client: Client, message: Message):
         logger.info(f"Admin {message.from_user.id} deleted file {db_file_id} from database.")
     else:
         await message.reply("❌ <b>File not found in database or failed to delete.</b>", parse_mode=enums.ParseMode.HTML)
+
+
+@Client.on_message((filters.private | filters.group) & filters.command("request"))
+async def request_command_handler(client: Client, message: Message):
+    request_text = None
+
+    if len(message.command) > 1:
+        request_text = " ".join(message.command[1:]).strip()
+
+    if not request_text and message.reply_to_message:
+        request_text = message.reply_to_message.text or message.reply_to_message.caption
+        request_text = request_text.strip() if request_text else None
+
+    if not request_text:
+        return await message.reply(
+            "❌ Usage: /request <movie name>\n"
+            "Or reply to a message with /request to forward that text."
+        )
+
+    request_text = request_text[:1000]
+    user = message.from_user
+    user_link = f"<a href='tg://user?id={user.id}'>{html.escape(user.first_name or str(user.id))}</a>"
+    username_str = f" (@{user.username})" if user.username else ""
+    chat_label = "Private Message" if message.chat.type == enums.ChatType.PRIVATE else f"Group: {html.escape(message.chat.title or str(message.chat.id))}"
+
+    log_channel = getattr(settings, "LOG_CHANNEL", 0)
+    if not log_channel:
+        await message.reply(
+            "✅ Request received, but LOG_CHANNEL is not configured."
+        )
+        return
+
+    callback_data = f"request_done#{user.id}#{message.chat.id}#{message.id}"
+    cancel_data = f"request_cancel#{user.id}#{message.chat.id}#{message.id}"
+    buttons = [
+        [
+            InlineKeyboardButton(
+                "✅ Confirm added to DB",
+                callback_data=callback_data,
+            )
+        ],
+        [
+            InlineKeyboardButton(
+                "❌ Already in DB",
+                callback_data=cancel_data,
+            )
+        ],
+    ]
+
+    log_text = (
+        f"<b>🎬 Request</b>\n\n"
+        f"<b>User:</b> {user_link}{username_str}\n"
+        f"<b>User ID:</b> <code>{user.id}</code>\n"
+        f"<b>Source:</b> {chat_label}\n"
+        f"<b>Request:</b> <pre>{html.escape(request_text)}</pre>"
+    )
+
+    try:
+        await client.send_message(
+            log_channel,
+            log_text,
+            parse_mode=enums.ParseMode.HTML,
+            reply_markup=build_inline_markup(buttons),
+        )
+    except Exception as e:
+        logger.exception(f"Failed to send request to LOG_CHANNEL: {e}")
+        await message.reply("❌ Failed to forward your request. Please try again later.")
+        return
+
+    await message.reply("📩 Your request has been sent to the admin logs.")
+
+
+@Client.on_callback_query(filters.regex(r"^request_done#"))
+async def request_done_callback(client: Client, query: CallbackQuery):
+    if query.from_user.id not in settings.ADMINS:
+        return await query.answer("Only admins can confirm requests.", show_alert=True)
+
+    parts = query.data.split("#")
+    if len(parts) != 4:
+        return await query.answer("Invalid request callback.", show_alert=True)
+
+    try:
+        requester_id = int(parts[1])
+    except ValueError:
+        return await query.answer("Invalid requester ID.", show_alert=True)
+
+    succeeded = await _notify_request_processed(client, requester_id)
+    if succeeded:
+        await query.answer("Requester notified.")
+        try:
+            await query.message.edit_text(
+                query.message.text + "\n\n✅ <b>Request processed by admin.</b>",
+                parse_mode=enums.ParseMode.HTML,
+            )
+        except Exception:
+            pass
+    else:
+        await query.answer("Could not message the requester.", show_alert=True)
+        try:
+            await query.message.edit_text(
+                query.message.text + "\n\n⚠️ <b>Could not notify requester.</b>",
+                parse_mode=enums.ParseMode.HTML,
+            )
+        except Exception:
+            pass
+
+
+@Client.on_callback_query(filters.regex(r"^request_cancel#"))
+async def request_cancel_callback(client: Client, query: CallbackQuery):
+    if query.from_user.id not in settings.ADMINS:
+        return await query.answer("Only admins can cancel requests.", show_alert=True)
+
+    parts = query.data.split("#")
+    if len(parts) != 4:
+        return await query.answer("Invalid request callback.", show_alert=True)
+
+    try:
+        requester_id = int(parts[1])
+    except ValueError:
+        return await query.answer("Invalid requester ID.", show_alert=True)
+
+    message_text = (
+        "❌ <b>File is already available in the DB.</b>\n"
+        "Please check 🙂"
+    )
+    succeeded = await _notify_request_processed(client, requester_id, message_text)
+    if succeeded:
+        await query.answer("Requester notified.")
+        try:
+            await query.message.edit_text(
+                query.message.text + "\n\n❌ <b>Checked DB and notified requester.</b>",
+                parse_mode=enums.ParseMode.HTML,
+            )
+        except Exception:
+            pass
+    else:
+        await query.answer("Could not message the requester.", show_alert=True)
+        try:
+            await query.message.edit_text(
+                query.message.text + "\n\n⚠️ <b>Could not notify requester.</b>",
+                parse_mode=enums.ParseMode.HTML,
+            )
+        except Exception:
+            pass
+
 
 @Client.on_message(filters.command("setstartup") & filters.private)
 async def set_startup_image(client: Client, message: Message):
@@ -364,12 +529,23 @@ async def delete_file_handler(client: Client, message: Message):
 
 
 async def send_text_start(message: Message, buttons):
+    reply_markup = build_inline_markup(buttons)
+    ott_months = list(OTT_RELEASE_CALENDAR.keys())
+    keyboard = []
+    # Create rows with 4 buttons each
+    for i in range(0, len(ott_months), 4):
+        keyboard.append([KeyboardButton(month) for month in ott_months[i:i+4]])
+    reply_keyboard_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
+
+    start_text = Texts.START_TXT.format(
+        message.from_user.mention,
+        RuntimeCache.bot_username,
+    )
+    ott_text = "\n\n🗓️ Tap a month below to explore the OTT release calendar."
+
     await message.reply_text(
-        Texts.START_TXT.format(
-            message.from_user.mention,
-            RuntimeCache.bot_username,
-        ),
-        reply_markup=InlineKeyboardMarkup(buttons),
+        start_text + ott_text,
+        reply_markup=reply_keyboard_markup,
         parse_mode=enums.ParseMode.HTML,
         disable_web_page_preview=True,
     )
@@ -507,7 +683,7 @@ async def publish_updates_handler(client: Client, message: Message):
                         photo=replied_message.photo.file_id,
                         caption=formatted_caption,
                         parse_mode=enums.ParseMode.HTML,
-                        reply_markup=InlineKeyboardMarkup(buttons)
+                        reply_markup=build_inline_markup(buttons)
                     )
                 else:
                     await client.send_photo(
@@ -680,10 +856,7 @@ async def _get_watchlist_message_and_buttons(user_id: int):
     
     if not watchlist:
         text = "Your watchlist is empty. Use /addwatchlist to add TV series."
-        buttons = [[
-            InlineKeyboardButton("◀️ BACK", callback_data="start", style=enums.ButtonStyle.PRIMARY),
-            InlineKeyboardButton("🔐 CLOSE", callback_data="close_data", style=enums.ButtonStyle.DEFAULT)
-        ]]
+        buttons = [build_close_button_row("start")]
         return text, buttons
 
     text = "📺 YOUR WATCHLIST\n────────────────\n\n"
@@ -736,10 +909,7 @@ async def _get_watchlist_message_and_buttons(user_id: int):
     shows_count = len(watchlist)
     text += f"<code>────────────────\n{shows_count} shows • Updated just now</code>"
     
-    buttons.append([
-        InlineKeyboardButton("◀️ Back", callback_data="start", style=enums.ButtonStyle.PRIMARY),
-        InlineKeyboardButton("🔐 Close", callback_data="close_data", style=enums.ButtonStyle.DEFAULT)
-    ])
+    buttons.append(build_close_button_row("start"))
     return text, buttons
 
 
@@ -756,7 +926,7 @@ async def my_watchlist_start_callback_handler(client: Client, callback: Callback
     try:
         await callback.message.edit_text(
             text,
-            reply_markup=InlineKeyboardMarkup(buttons),
+            reply_markup=build_inline_markup(buttons),
             parse_mode=enums.ParseMode.HTML,
             disable_web_page_preview=True,
         )
@@ -771,7 +941,7 @@ async def my_watchlist_handler(client: Client, message: Message):
 
     await message.reply(
         text,
-        reply_markup=InlineKeyboardMarkup(buttons),
+        reply_markup=build_inline_markup(buttons),
         parse_mode=enums.ParseMode.HTML,
         disable_web_page_preview=True,
     )
@@ -819,7 +989,7 @@ async def add_watchlist_handler(client: Client, message: Message):
             )
         await message.reply(
             f"Multiple TV series found for '{html.escape(query)}'. Please select one:",
-            reply_markup=InlineKeyboardMarkup(buttons),
+            reply_markup=build_inline_markup(buttons),
         )
 
 
@@ -870,51 +1040,6 @@ async def watchlist_add_callback_handler(client: Client, callback: CallbackQuery
         pass  # Message might have been deleted or edited by another user
 
 
-@Client.on_message(filters.command("mywatchlist") & filters.private)
-async def my_watchlist_handler(client: Client, message: Message):
-    """Displays the user's watchlist."""
-    watchlist = await db.get_watchlist(message.from_user.id)
-
-    if not watchlist:
-        return await message.reply("Your watchlist is empty. Use /addwatchlist to add TV series.")
-
-    text = "📺 Your Watchlist:\n\n"
-    buttons = []
-    for item in watchlist:
-        tmdb_id = item['tmdb_id']
-        media_type = item['media_type']
-        
-        # Fetch details for display
-        series_info = await get_imdb_info(f"{media_type} {tmdb_id}", id=True)
-        if series_info:
-            title = series_info.get("title", f"Series ID: {tmdb_id}")
-            year = series_info.get("year", "")
-            text += f"• <a href='{series_info['url']}'>{title}</a> ({year})\n"
-            buttons.append(
-                [
-                    InlineKeyboardButton(
-                        text=f"Remove {title}",
-                        callback_data=f"watchlist_remove#{media_type}#{tmdb_id}",
-                        style=enums.ButtonStyle.DANGER,
-                    )
-                ]
-            )
-        else:
-            text += f"• Unknown Series (ID: {tmdb_id})\n"
-            buttons.append(
-                [InlineKeyboardButton(text=f"Remove Unknown Series (ID: {tmdb_id})", callback_data=f"watchlist_remove#{media_type}#{tmdb_id}", style=enums.ButtonStyle.DANGER)]
-            )
-    
-    buttons.append([InlineKeyboardButton("🔐 Close", callback_data="close_data", style=enums.ButtonStyle.DANGER)])
-
-    await message.reply(
-        text,
-        reply_markup=InlineKeyboardMarkup(buttons),
-        parse_mode=enums.ParseMode.HTML,
-        disable_web_page_preview=True,
-    )
-
-
 @Client.on_callback_query(filters.regex("^watchlist_remove#"))
 async def watchlist_remove_callback_handler(client: Client, callback: CallbackQuery):
     """Handles callback for removing a series from watchlist."""
@@ -945,7 +1070,7 @@ async def watchlist_remove_callback_handler(client: Client, callback: CallbackQu
         try:
             await callback.message.edit_text(
                 text,
-                reply_markup=InlineKeyboardMarkup(buttons),
+                reply_markup=build_inline_markup(buttons),
                 parse_mode=enums.ParseMode.HTML,
                 disable_web_page_preview=True,
             )
@@ -979,7 +1104,7 @@ async def start_handler(client: Client, message: Message):
 
         await message.reply(
             group_start_text,
-            reply_markup=InlineKeyboardMarkup(buttons),
+            reply_markup=build_inline_markup(buttons),
             parse_mode=enums.ParseMode.MARKDOWN,
         )
 
@@ -1042,16 +1167,15 @@ async def start_handler(client: Client, message: Message):
         logger.exception("User registration check failed during /start")
 
     if len(message.command) != 2:
-        buttons = [
-            [
-                InlineKeyboardButton("🔍 Search", switch_inline_query_current_chat="", style=enums.ButtonStyle.SUCCESS),
-                InlineKeyboardButton("👀 Watchlist", callback_data="mywatchlist_start", style=enums.ButtonStyle.PRIMARY),
-            ],
-            [
-                InlineKeyboardButton("ℹ️ About", callback_data="about", style=enums.ButtonStyle.PRIMARY),
-                InlineKeyboardButton("📖 Help", callback_data="help", style=enums.ButtonStyle.DANGER),
-            ],
-        ]
+        buttons = build_start_buttons()
+
+        ott_months = list(OTT_RELEASE_CALENDAR.keys())
+        keyboard = []
+        # Create rows with 4 buttons each
+        for i in range(0, len(ott_months), 4):
+            keyboard.append([KeyboardButton(month) for month in ott_months[i:i+4]])
+        reply_keyboard_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
+
 
         startup_images = []
         try:
@@ -1064,27 +1188,35 @@ async def start_handler(client: Client, message: Message):
         except Exception:
             logger.exception("Failed to get startup images from database")
             startup_images = []
+        
+        start_caption = Texts.START_TXT.format(
+            message.from_user.mention,
+            RuntimeCache.bot_username,
+        )
+        ott_text = "\n\n🗓️ Tap a month below to explore the OTT release calendar."
 
-        if not startup_images:
-            return await send_text_start(message, buttons)
-
-        pic_to_use = random.choice(startup_images)
-        logger.info(f"Selected startup image: {pic_to_use[:50]}...")
-
-        try:
+        if startup_images:
+            pic_to_use = random.choice(startup_images)
+            logger.info(f"Selected startup image: {pic_to_use[:50]}...")
             await message.reply_photo(
                 pic_to_use,
-                caption=Texts.START_TXT.format(
-                    message.from_user.mention,
-                    RuntimeCache.bot_username,
-                ),
-                reply_markup=InlineKeyboardMarkup(buttons),
+                caption=start_caption,
+                reply_markup=build_inline_markup(buttons),
                 parse_mode=enums.ParseMode.HTML,
             )
-        except Exception:
-            logger.exception("Failed to send startup image, sending text-only start")
-            await send_text_start(message, buttons)
-
+            await message.reply_text(
+                "🗓️ Tap a month below to explore the OTT release calendar.",
+                reply_markup=reply_keyboard_markup,
+                parse_mode=enums.ParseMode.HTML,
+            )
+        else:
+            # No images, send combined text message
+            await message.reply_text(
+                start_caption + ott_text,
+                reply_markup=reply_keyboard_markup,
+                parse_mode=enums.ParseMode.HTML,
+                disable_web_page_preview=True,
+            )
         return
 
     # AUTH_CHANNEL removed — no forced subscription required

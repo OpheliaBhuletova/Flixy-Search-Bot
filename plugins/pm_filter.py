@@ -2,10 +2,10 @@ import asyncio
 import re
 import ast
 import math
-import logging
+import logging 
 
 from pyrogram import Client, filters, enums
-from pyrogram.types import InlineKeyboardMarkup, InlineKeyboardButton, CallbackQuery
+from pyrogram.types import InlineKeyboardButton, CallbackQuery, Message
 from pyrogram.errors import FloodWait, UserIsBlocked, MessageNotModified, PeerIdInvalid
 from pyrogram.errors.exceptions.bad_request_400 import (
     MediaEmpty,
@@ -14,6 +14,7 @@ from pyrogram.errors.exceptions.bad_request_400 import (
 )
 
 from bot.config import settings
+from bot.utils.ott_releases import OTT_RELEASE_CALENDAR
 
 from database.connections_mdb import (
     active_connection,
@@ -61,6 +62,27 @@ async def group_message_router(client: Client, message):
         await auto_filter(client, message)
 
 
+@Client.on_message(filters.private & filters.text & filters.regex(f"^({'|'.join(OTT_RELEASE_CALENDAR.keys())})$") & filters.incoming)
+async def ott_release_handler(client: Client, message: Message):
+    """Sends the pre-configured OTT release calendar for the selected month."""
+    month = message.text
+    calendar_text = OTT_RELEASE_CALENDAR.get(month)
+
+    if not calendar_text:
+        await message.reply("Sorry, the calendar for that month is not available.")
+        return
+
+    try:
+        await message.reply_text(
+            text=calendar_text,
+            parse_mode=enums.ParseMode.HTML,
+            disable_web_page_preview=True,
+        )
+    except Exception as e:
+        logger.exception(f"Failed to send {month} OTT release text.")
+        await message.reply("Sorry, I couldn't retrieve the calendar at the moment.")
+
+
 # ---------------- PRIVATE MESSAGE HANDLER ---------------- #
 
 @Client.on_message(filters.private & filters.text & filters.incoming)
@@ -74,13 +96,7 @@ async def private_message_router(client: Client, message):
     if message.text.startswith("/") or len(message.text) > 300:
         return
 
-    # Only sudo users and admins can trigger PM movie searches.  Normal
-    # users are directed to inline mode instead of receiving replies here.
-    uid = message.from_user.id if message.from_user else None
-    if uid and uid not in settings.SUDO_USERS and uid not in settings.ADMINS:
-        return
-
-    # reuse auto_filter implementation for private chats
+    # All users can search in private chats.
     await auto_filter(client, message)
 
 
@@ -240,21 +256,21 @@ async def next_page(client: Client, query: CallbackQuery):
     nav = []
     if offset > 0:
         nav.append(
-            InlineKeyboardButton("⏪ BACK", callback_data=f"next_{req}_{key}_{offset-10}", style=enums.ButtonStyle.DEFAULT)
+            InlineKeyboardButton("⏪ BACK", callback_data=f"next_{req}_{key}_{offset-10}", style=enums.ButtonStyle.PRIMARY)
         )
     nav.append(
         InlineKeyboardButton(f"📃 {page}/{total_pages}", callback_data="pages", style=enums.ButtonStyle.DEFAULT)
     )
     if next_offset:
         nav.append(
-            InlineKeyboardButton("NEXT ⏩", callback_data=f"next_{req}_{key}_{next_offset}", style=enums.ButtonStyle.DEFAULT)
+            InlineKeyboardButton("NEXT ⏩", callback_data=f"next_{req}_{key}_{next_offset}", style=enums.ButtonStyle.SUCCESS)
         )
 
     buttons.append(nav)
 
     try:
         await query.edit_message_reply_markup(
-            InlineKeyboardMarkup(buttons)
+            build_inline_markup(buttons)
         )
     except MessageNotModified:
         pass
@@ -329,7 +345,8 @@ async def callback_router(client: Client, query: CallbackQuery):
             )
         return
 
-    await query.answer()
+    # Do not intercept callbacks managed by other modules.
+    return
 
 
 async def _schedule_task(coro_func, delay: int):
@@ -360,18 +377,13 @@ async def auto_filter(client: Client, message, spoll=None):
             return
         search = message.text.strip()
         
-        # Show animated "🔍 Searching..." message
-        dots = ["", ".", "..", "..."]
-        for i in range(4):
-            try:
-                await client.send_message_draft(
-                    chat_id=message.chat.id,
-                    draft_id=draft_id,
-                    text=f"🔍 Searching{dots[i % 4]}"
-                )
-                await asyncio.sleep(0.4)
-            except Exception:
-                pass
+        # Show "🔍 Searching..." message
+        try:
+            await client.send_message_draft(
+                chat_id=message.chat.id, draft_id=draft_id, text="🔍 Searching"
+            )
+        except Exception:
+            pass
         
         files, offset, total = await get_pm_search_results_with_fallback(search.lower(), filter=True)
         if not files:
@@ -416,7 +428,7 @@ async def auto_filter(client: Client, message, spoll=None):
             InlineKeyboardButton(
                 "NEXT ⏩",
                 callback_data=f"next_{message.from_user.id}_{key}_{offset}",
-                style=enums.ButtonStyle.DEFAULT,
+                style=enums.ButtonStyle.SUCCESS,
             ),
         ])
 
@@ -441,27 +453,27 @@ async def auto_filter(client: Client, message, spoll=None):
     if imdb and imdb.get("poster"):
         try:
             await message.reply_photo(
-                imdb["poster"], caption[:1024], reply_markup=InlineKeyboardMarkup(buttons)
+                imdb["poster"], caption[:1024], reply_markup=build_inline_markup(buttons)
             )
         except (MediaEmpty, PhotoInvalidDimensions, WebpageMediaEmpty):
             if not imdb:
                 await message.reply_text(
                     caption,
-                    reply_markup=InlineKeyboardMarkup(buttons),
+                    reply_markup=build_inline_markup(buttons),
                     parse_mode=enums.ParseMode.HTML,
                 )
             else:
-                await message.reply_text(caption, reply_markup=InlineKeyboardMarkup(buttons))
+                await message.reply_text(caption, reply_markup=build_inline_markup(buttons))
     else:
         # When no IMDb/template is used, caption contains HTML and should be sent as HTML
         if not imdb:
             await message.reply_text(
                 caption,
-                reply_markup=InlineKeyboardMarkup(buttons),
+                reply_markup=build_inline_markup(buttons),
                 parse_mode=enums.ParseMode.HTML,
             )
         else:
-            await message.reply_text(caption, reply_markup=InlineKeyboardMarkup(buttons))
+            await message.reply_text(caption, reply_markup=build_inline_markup(buttons))
 
 
 # ---------------- SPELL CHECK ---------------- #
@@ -484,7 +496,7 @@ async def spell_check(message):
 
     await message.reply(
         "Did you mean:",
-        reply_markup=InlineKeyboardMarkup(buttons),
+        reply_markup=build_inline_markup(buttons),
     )
 
 
@@ -500,7 +512,7 @@ async def manual_filters(client: Client, message, text=None):
             reply_text, btn, alert, fileid = await find_filter(group_id, keyword)
 
             reply_text = reply_text.replace("\\n", "\n") if reply_text else ""
-            markup = InlineKeyboardMarkup(ast.literal_eval(btn)) if btn not in ("[]", None) else None
+            markup = build_inline_markup(ast.literal_eval(btn)) if btn not in ("[]", None) else None
 
             if fileid and fileid != "None":
                 await message.reply_cached_media(fileid, caption=reply_text, reply_markup=markup)
