@@ -8,7 +8,7 @@ import aiohttp
 from pyrogram import Client, filters, enums
 from pyrogram.types import CallbackQuery
 from pyrogram.types import InlineKeyboardButton, InlineKeyboardMarkup, Message
-from pyrogram.errors import PeerIdInvalid, MessageNotModified, QueryIdInvalid
+from pyrogram.errors import PeerIdInvalid, MessageNotModified, QueryIdInvalid, UserNotParticipant
 
 from bot.config import settings
 from bot.utils.messages import Texts
@@ -942,6 +942,87 @@ async def watchlist_remove_callback_handler(client: Client, callback: CallbackQu
             await callback.answer(f"Failed to remove '{series_title}' from your watchlist.", show_alert=True)
         except QueryIdInvalid:
             pass
+
+@Client.on_callback_query(filters.regex(r"^check_joined$"))
+async def check_joined_handler(client: Client, query: CallbackQuery):
+    UPDATES_CHANNEL_ID = -1004354755471
+    try:
+        user = await client.get_chat_member(UPDATES_CHANNEL_ID, query.from_user.id)
+        if user.status == enums.ChatMemberStatus.BANNED:
+            await query.answer("You are banned from our updates channel.", show_alert=True)
+            return
+    except UserNotParticipant:
+        await query.answer("You haven't joined the channel yet. Please join and then click refresh.", show_alert=True)
+        return
+    except Exception as e:
+        logger.error(f"Error checking channel membership on callback for {query.from_user.id}: {e}")
+        await query.answer("An error occurred. Please try again later.", show_alert=True)
+        return
+
+    # User has joined. Delete the "join" message and send the normal start message.
+    await query.message.delete()
+
+    # Re-create the start message logic here.
+    buttons = [
+        [
+            InlineKeyboardButton("🔍 Search", switch_inline_query_current_chat="", style=enums.ButtonStyle.SUCCESS),
+            InlineKeyboardButton("👀 Watchlist", callback_data="mywatchlist_start", style=enums.ButtonStyle.PRIMARY),
+        ],
+        [
+            InlineKeyboardButton("🗓️ OTT Release Calendar", callback_data="ott_calendar_main")
+        ],
+        [
+            InlineKeyboardButton("ℹ️ About", callback_data="about", style=enums.ButtonStyle.PRIMARY),
+            InlineKeyboardButton("📖 Help", callback_data="help", style=enums.ButtonStyle.DANGER),
+        ],
+    ]
+
+    startup_images = []
+    try:
+        db_images = await db.get_startup_images()
+        if db_images:
+            startup_images = db_images
+    except Exception:
+        startup_images = []
+
+    if not startup_images:
+        await client.send_message(
+            chat_id=query.message.chat.id,
+            text=Texts.START_TXT.format(
+                query.from_user.mention,
+                RuntimeCache.bot_username,
+            ),
+            reply_markup=InlineKeyboardMarkup(buttons),
+            parse_mode=enums.ParseMode.HTML,
+            disable_web_page_preview=True,
+        )
+    else:
+        pic_to_use = random.choice(startup_images)
+        try:
+            await client.send_photo(
+                chat_id=query.message.chat.id,
+                photo=pic_to_use,
+                caption=Texts.START_TXT.format(
+                    query.from_user.mention,
+                    RuntimeCache.bot_username,
+                ),
+                reply_markup=InlineKeyboardMarkup(buttons),
+                parse_mode=enums.ParseMode.HTML,
+            )
+        except Exception:
+            logger.exception("Failed to send startup image on join refresh, sending text-only start")
+            await client.send_message(
+                chat_id=query.message.chat.id,
+                text=Texts.START_TXT.format(
+                    query.from_user.mention,
+                    RuntimeCache.bot_username,
+                ),
+                reply_markup=InlineKeyboardMarkup(buttons),
+                parse_mode=enums.ParseMode.HTML,
+                disable_web_page_preview=True,
+            )
+    
+    await query.answer("Welcome!")
 @Client.on_message(filters.command("start") & filters.incoming)
 async def start_handler(client: Client, message: Message):
     # ── GROUP START ──
@@ -1027,6 +1108,29 @@ async def start_handler(client: Client, message: Message):
     except Exception:
         logger.exception("User registration check failed during /start")
 
+    # Force Subscription
+    UPDATES_CHANNEL_ID = -1004354755471
+    try:
+        member = await client.get_chat_member(UPDATES_CHANNEL_ID, message.from_user.id)
+        if member.status == enums.ChatMemberStatus.BANNED:
+            await message.reply_text("You are banned from the updates channel. Contact support.", quote=True)
+            return
+    except UserNotParticipant:
+        UPDATES_CHANNEL_INVITE_LINK = "https://t.me/+M4IyQd0PxgMyYTg9"
+        buttons = [[
+            InlineKeyboardButton("Join Updates Channel", url=UPDATES_CHANNEL_INVITE_LINK)
+        ], [
+            InlineKeyboardButton("🔄 Refresh", callback_data="check_joined")
+        ]]
+        await message.reply_text(
+            "Please join our updates channel to use the bot.",
+            reply_markup=InlineKeyboardMarkup(buttons),
+            quote=True
+        )
+        return
+    except Exception as e:
+        logger.error(f"Error checking channel membership for {message.from_user.id}: {e}")
+
     if len(message.command) != 2:
         buttons = [
             [
@@ -1075,8 +1179,6 @@ async def start_handler(client: Client, message: Message):
             await send_text_start(message, buttons)
 
         return
-
-    # AUTH_CHANNEL removed — no forced subscription required
 
     data = message.command[1]
     ...
