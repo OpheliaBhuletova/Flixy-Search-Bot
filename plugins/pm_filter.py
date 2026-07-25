@@ -5,8 +5,8 @@ import math
 import logging
 
 from pyrogram import Client, filters, enums
-from pyrogram.types import InlineKeyboardMarkup, InlineKeyboardButton, CallbackQuery
-from pyrogram.errors import FloodWait, UserIsBlocked, MessageNotModified, PeerIdInvalid
+from pyrogram.types import InlineKeyboardMarkup, InlineKeyboardButton, CallbackQuery, Message
+from pyrogram.errors import FloodWait, UserIsBlocked, MessageNotModified, PeerIdInvalid, UserNotParticipant
 from pyrogram.errors.exceptions.bad_request_400 import (
     MediaEmpty,
     PhotoInvalidDimensions,
@@ -64,12 +64,37 @@ async def group_message_router(client: Client, message):
 # ---------------- PRIVATE MESSAGE HANDLER ---------------- #
 
 @Client.on_message(filters.private & filters.text & filters.incoming)
-async def private_message_router(client: Client, message):
+async def private_message_router(client: Client, message: Message):
     """Handle plain-text movie requests in private chats.
 
     Treat non-command short messages as search queries and reuse the
     existing auto_filter logic so users get the same results in PM.
     """
+    # Force Subscription
+    UPDATES_CHANNEL_ID = -1004354755471
+    try:
+        member = await client.get_chat_member(UPDATES_CHANNEL_ID, message.from_user.id)
+        if member.status == enums.ChatMemberStatus.BANNED:
+            await message.reply_text("You are banned from the updates channel. Contact support.", quote=True)
+            return
+    except UserNotParticipant:
+        UPDATES_CHANNEL_INVITE_LINK = "https://t.me/+M4IyQd0PxgMyYTg9"
+        buttons = [[
+            InlineKeyboardButton("Join Updates Channel", url=UPDATES_CHANNEL_INVITE_LINK)
+        ], [
+            InlineKeyboardButton("🔄 Refresh", callback_data="check_joined")
+        ]]
+        await message.reply_text(
+            "Please join our updates channel to use the bot.",
+            reply_markup=InlineKeyboardMarkup(buttons),
+            quote=True
+        )
+        return
+    except Exception as e:
+        logger.error(f"Error checking channel membership for PM search user {message.from_user.id}: {e}")
+        # Let them pass if there's an error, to not block usage.
+        pass
+
     # ignore commands and long messages
     if message.text.startswith("/") or len(message.text) > 300:
         return

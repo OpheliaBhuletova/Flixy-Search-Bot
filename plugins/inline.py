@@ -6,7 +6,7 @@ from pyrogram.types import (
     InlineKeyboardButton,
     InlineKeyboardMarkup,
     InlineQueryResultCachedDocument,
-    InlineQuery,
+    InlineQuery
 )
 from pyrogram.errors.exceptions.bad_request_400 import QueryIdInvalid
 
@@ -14,6 +14,7 @@ from bot.config import settings
 from bot.utils.cache import RuntimeCache
 from bot.utils.helpers import get_size, remove_file_extension
 from database.ia_filterdb import get_inline_search_results_with_fallback
+from pyrogram.errors import UserNotParticipant
 
 logger = logging.getLogger(__name__)
 
@@ -31,6 +32,22 @@ async def inline_user_allowed(query: InlineQuery) -> bool:
 @Client.on_inline_query()
 async def inline_query_handler(client: Client, query: InlineQuery):
     """Handle inline search queries"""
+    # Force Subscription check
+    UPDATES_CHANNEL_ID = -1004354755471
+    try:
+        await client.get_chat_member(UPDATES_CHANNEL_ID, query.from_user.id)
+    except UserNotParticipant:
+        return await query.answer(
+            [],
+            switch_pm_text="You must join our updates channel to use this feature.",
+            switch_pm_parameter="start",
+            cache_time=0
+        )
+    except Exception as e:
+        # Don't block users if the check fails, but log it.
+        logger.error(f"Error checking channel membership for inline user {query.from_user.id}: {e}")
+        pass
+
     if not await inline_user_allowed(query):
         return await query.answer(
             results=[],
