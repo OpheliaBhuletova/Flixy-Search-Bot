@@ -78,7 +78,7 @@ async def private_message_router(client: Client, message: Message):
             await message.reply_text("You are banned from the updates channel. Contact support.", quote=True)
             return
     except UserNotParticipant:
-        UPDATES_CHANNEL_INVITE_LINK = "https://t.me/+M4IyQd0PxgMyYTg9"
+        UPDATES_CHANNEL_INVITE_LINK = "https://t.me/+oTJ1aUw4ZRxmMDc9"
         buttons = [[
             InlineKeyboardButton("Join Updates Channel", url=UPDATES_CHANNEL_INVITE_LINK)
         ], [
