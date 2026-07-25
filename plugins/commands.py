@@ -13,12 +13,10 @@ from pyrogram.errors import PeerIdInvalid, MessageNotModified, QueryIdInvalid
 from bot.config import settings
 from bot.utils.messages import Texts
 from bot.utils.cache import RuntimeCache
-from bot.utils.helpers import get_file_id
+from bot.utils.helpers import get_file_id, schedule_delete_message
 from bot.services.metadata_service import get_imdb_info, search_tmdb_titles
 from database.ia_filterdb import delete_file_by_id, unpack_new_file_id
-
 from database.users_chats_db import db
-from database.ia_filterdb import delete_file as db_delete_file, unpack_new_file_id
 
 logger = logging.getLogger(__name__)
 
@@ -167,15 +165,12 @@ async def delete_file_command(client: Client, message: Message):
         await message.reply("❌ Please reply to a file or provide a file_id to delete.")
         return
         
-    try:
-        db_file_id, _ = unpack_new_file_id(file_id)
-    except Exception:
-        db_file_id = file_id # fallback if already unpacked
-        
-    deleted = await db_delete_file(db_file_id)
-    if deleted:
-        await message.reply("✅ <b>File successfully deleted from database!</b>", parse_mode=enums.ParseMode.HTML)
-        logger.info(f"Admin {message.from_user.id} deleted file {db_file_id} from database.")
+    # Use the more robust deletion method that handles all DBs and announcement status
+    success, deleted_file_name = await delete_file_by_id(file_id)
+    
+    if success:
+        await message.reply(f"✅ File <b>{html.escape(deleted_file_name or 'N/A')}</b> successfully deleted from all databases.", parse_mode=enums.ParseMode.HTML)
+        logger.info(f"Admin {message.from_user.id} deleted file {deleted_file_name} ({file_id}) from database.")
     else:
         await message.reply("❌ <b>File not found in database or failed to delete.</b>", parse_mode=enums.ParseMode.HTML)
 
@@ -311,56 +306,6 @@ async def delete_all_images_command(client: Client, message: Message):
     except Exception as e:
         logger.exception(e)
         await message.reply(f"❌ Error deleting images: {e}")
-
-
-@Client.on_message(filters.command("deletefile") & filters.user(settings.ADMINS))
-async def delete_file_handler(client: Client, message: Message):
-    """Delete a specific file from the media database (admin only).
-    
-    Usage: 
-    1. Reply to a file with /deletefile [inline|pm]
-    2. /deletefile <file_id> [inline|pm]
-    """
-    file_id = None
-    db_type = "default"
-    
-    if message.reply_to_message:
-        media = get_file_id(message.reply_to_message)
-        if media:
-            file_id, _ = unpack_new_file_id(media.file_id)
-        
-        if len(message.command) > 1:
-            db_type = message.command[1].lower()
-    else:
-        if len(message.command) < 2:
-            return await message.reply(
-                "❌ <b>Usage:</b>\n"
-                "1. Reply to a media file with <code>/deletefile</code>\n"
-                "2. <code>/deletefile [file_id] [db_type]</code>",
-                parse_mode=enums.ParseMode.HTML
-            )
-        # The file_id from command might be in Telegram format, try to unpack it
-        try:
-            file_id, _ = unpack_new_file_id(message.command[1])
-        except Exception:
-            # If unpacking fails, use it as-is (already unpacked format)
-            file_id = message.command[1]
-        
-        if len(message.command) > 2:
-            db_type = message.command[2].lower()
-
-    if not file_id:
-        return await message.reply("❌ Could not identify a valid file to delete.")
-
-    logger.info(f"🗑️  Attempting to delete file: {file_id} from {db_type} database")
-    success, deleted_file_name = await delete_file_by_id(file_id, db_type)
-    
-    if success:
-        logger.info(f"✅ File deleted successfully: {deleted_file_name} (ID: {file_id}) from {db_type} database")
-        await message.reply(f"✅ File successfully removed from <b>{db_type}</b> database.\n\n📄 <code>{deleted_file_name}</code>")
-    else:
-        logger.warning(f"❌ File not found: {file_id} in {db_type} database")
-        await message.reply(f"❌ File not found in <b>{db_type}</b> database.")
 
 
 async def send_text_start(message: Message, buttons):
@@ -656,6 +601,47 @@ async def publish_updates_handler(client: Client, message: Message):
         logger.exception(f"Error publishing update: {e}")
         await message.reply(f"❌ Error publishing update: {str(e)}")
 
+
+@Client.on_message(filters.command("msg") & filters.user(settings.ADMINS) & filters.chat(-1004468814179))
+async def send_user_message_command(client: Client, message: Message):
+    """Send a message to a user from a specific admin chat.
+    
+    Usage: /msg <user_id> "Your message here"
+    """
+    logger.info(f"Attempting to handle /msg from user {message.from_user.id} in chat {message.chat.id}")
+    # Schedule the admin's command message for deletion immediately.
+    schedule_delete_message(client, message.chat.id, message.id, delay_seconds=60)
+
+    bot_reply = None
+    try:
+        if len(message.command) < 3:
+            bot_reply = await message.reply("Usage: `/msg <user_id> \"Your message here\"`")
+            return
+
+        try:
+            target_user_id = int(message.command[1])
+        except ValueError:
+            bot_reply = await message.reply("❌ Invalid User ID. Please provide a numeric user ID.")
+            return
+        
+        text_to_send = " ".join(message.command[2:])
+
+        try:
+            await client.send_message(
+                chat_id=target_user_id,
+                text=text_to_send,
+                parse_mode=enums.ParseMode.HTML
+            )
+            bot_reply = await message.reply(f"✅ Message successfully sent to user `{target_user_id}`.")
+        except PeerIdInvalid:
+            bot_reply = await message.reply(f"❌ Failed to send message. User ID `{target_user_id}` seems to be invalid or I can't reach them.")
+        except Exception as e:
+            logger.error(f"Failed to send message to {target_user_id} via /msg command: {e}")
+            bot_reply = await message.reply(f"❌ An error occurred while sending the message: `{e}`")
+    finally:
+        # If the bot sent a reply, schedule it for deletion as well.
+        if bot_reply:
+            schedule_delete_message(client, bot_reply.chat.id, bot_reply.id, delay_seconds=60)
 
 @Client.on_callback_query(filters.regex(r"^emoji_"))
 async def emoji_reaction_handler(client: Client, query):
@@ -1046,6 +1032,9 @@ async def start_handler(client: Client, message: Message):
             [
                 InlineKeyboardButton("🔍 Search", switch_inline_query_current_chat="", style=enums.ButtonStyle.SUCCESS),
                 InlineKeyboardButton("👀 Watchlist", callback_data="mywatchlist_start", style=enums.ButtonStyle.PRIMARY),
+            ],
+            [
+                InlineKeyboardButton("🗓️ OTT Release Calendar", callback_data="ott_calendar_main")
             ],
             [
                 InlineKeyboardButton("ℹ️ About", callback_data="about", style=enums.ButtonStyle.PRIMARY),

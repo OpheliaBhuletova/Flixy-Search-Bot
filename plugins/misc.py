@@ -26,6 +26,8 @@ from bot.utils.helpers import extract_user, get_file_id, schedule_delete_message
 from bot.utils.cache import RuntimeCache
 from bot.utils.messages import Texts
 from bot.services.metadata_service import get_imdb_info, get_poster, search_tmdb_titles
+from database.ott_db import get_ott_message, set_ott_message # New import
+import ast # New import for literal_eval
 
 logger = logging.getLogger(__name__)
 
@@ -418,6 +420,9 @@ async def help_about_callback_handler(client: Client, callback: CallbackQuery):
                 InlineKeyboardButton("👀 Watchlist", callback_data="mywatchlist_start", style=enums.ButtonStyle.PRIMARY),
             ],
             [
+                InlineKeyboardButton("🗓️ OTT Release Calendar", callback_data="ott_calendar_main")
+            ],
+            [
                 InlineKeyboardButton("ℹ️ About", callback_data="about", style=enums.ButtonStyle.PRIMARY),
                 InlineKeyboardButton("📖 Help", callback_data="help", style=enums.ButtonStyle.DANGER),
             ],
@@ -535,3 +540,168 @@ async def help_about_callback_handler(client: Client, callback: CallbackQuery):
         return
 
     await callback.answer()
+
+
+# Handler for ott_calendar_main
+@Client.on_callback_query(filters.regex("^ott_calendar_main$"))
+async def ott_calendar_main_handler(client: Client, callback: CallbackQuery):
+    months = [
+        ["January", "February", "March", "April"],
+        ["May", "June", "July", "August"],
+        ["September", "October", "November", "December"]
+    ]
+    
+    buttons = []
+    for row_index, row in enumerate(months):
+        row_buttons = []
+        for col_index, month_name in enumerate(row):
+            if row_index % 2 == 0:
+                style = enums.ButtonStyle.PRIMARY if col_index % 2 == 0 else enums.ButtonStyle.DEFAULT
+            else:
+                style = enums.ButtonStyle.DEFAULT if col_index % 2 == 0 else enums.ButtonStyle.PRIMARY
+            row_buttons.append(
+                InlineKeyboardButton(
+                    month_name[:3],
+                    callback_data=f"ott_month_{month_name.lower()}",
+                    style=style
+                )
+            )
+        buttons.append(row_buttons)
+    
+    buttons.append([
+        InlineKeyboardButton("◀️ Back", callback_data="start", style=enums.ButtonStyle.PRIMARY),
+        InlineKeyboardButton("🔐 Close", callback_data="close_data", style=enums.ButtonStyle.DANGER)
+    ])
+    
+    await callback.message.edit_text(
+        "🗓️ Select a month for OTT Release Calendar:",
+        reply_markup=InlineKeyboardMarkup(buttons),
+        parse_mode=enums.ParseMode.HTML
+    )
+    await callback.answer()
+
+# Handler for ott_month_<month>
+@Client.on_callback_query(filters.regex("^ott_month_"))
+async def ott_month_handler(client: Client, callback: CallbackQuery):
+    month = callback.data.split("_", 2)[2] # e.g., "january"
+    
+    ott_msg_data = await get_ott_message(month)
+    
+    if ott_msg_data and ott_msg_data.text:
+        text = ott_msg_data.text
+        buttons_json = ott_msg_data.buttons
+        file_id = ott_msg_data.file_id
+
+        inline_buttons = []
+        if buttons_json:
+            try:
+                # Convert string representation of list of lists of dicts back to InlineKeyboardMarkup
+                buttons_list_of_dicts = ast.literal_eval(buttons_json)
+                # Reconstruct InlineKeyboardButton objects
+                for row in buttons_list_of_dicts:
+                    row_buttons = []
+                    for btn_dict in row:
+                        if "url" in btn_dict:
+                            row_buttons.append(InlineKeyboardButton(text=btn_dict["text"], url=btn_dict["url"]))
+                        elif "callback_data" in btn_dict:
+                            row_buttons.append(InlineKeyboardButton(text=btn_dict["text"], callback_data=btn_dict["callback_data"]))
+                        else:
+                            row_buttons.append(InlineKeyboardButton(text=btn_dict["text"])) # Fallback for plain button
+                    inline_buttons.append(row_buttons)
+            except Exception:
+                logger.exception(f"Failed to parse buttons for month {month}: {buttons_json}")
+
+        inline_buttons.append([
+            InlineKeyboardButton("◀️ Back", callback_data="ott_calendar_main", style=enums.ButtonStyle.PRIMARY),
+            InlineKeyboardButton("🔐 Close", callback_data="close_data", style=enums.ButtonStyle.DANGER)
+        ])
+        reply_markup = InlineKeyboardMarkup(inline_buttons)
+
+        try:
+            if file_id:
+                await callback.message.reply_cached_media(
+                    file_id,
+                    caption=text,
+                    reply_markup=reply_markup,
+                    parse_mode=enums.ParseMode.HTML
+                )
+            else:
+                await callback.message.edit_text(
+                    text,
+                    reply_markup=reply_markup,
+                    parse_mode=enums.ParseMode.HTML,
+                    disable_web_page_preview=True
+                )
+        except Exception:
+            logger.exception(f"Failed to send custom OTT message for {month}")
+            await callback.message.edit_text(
+                "An error occurred while fetching the custom message. Please try again later.",
+                reply_markup=InlineKeyboardMarkup([[
+                    InlineKeyboardButton("◀️ Back", callback_data="ott_calendar_main", style=enums.ButtonStyle.PRIMARY),
+                    InlineKeyboardButton("🔐 Close", callback_data="close_data", style=enums.ButtonStyle.DANGER)
+                ]]),
+                parse_mode=enums.ParseMode.HTML
+            )
+    else:
+        text = f"🗓️ OTT Updates for {month.capitalize()} will be added soon."
+        await callback.message.edit_text(
+            text,
+            reply_markup=InlineKeyboardMarkup([[
+                InlineKeyboardButton("◀️ Back", callback_data="ott_calendar_main", style=enums.ButtonStyle.PRIMARY),
+                InlineKeyboardButton("🔐 Close", callback_data="close_data", style=enums.ButtonStyle.DANGER)
+            ]]),
+            parse_mode=enums.ParseMode.HTML
+        )
+    
+    await callback.answer()
+
+# Admin command /update
+@Client.on_message(filters.command("update") & filters.user(settings.ADMINS) & filters.private)
+async def update_ott_message_handler(client: Client, message: Message):
+    if not message.reply_to_message:
+        return await message.reply("❌ Reply to a message containing the new content for the month.")
+    
+    if len(message.command) < 2:
+        return await message.reply("❌ Usage: /update <month_name> (reply to message)")
+    
+    month = message.command[1].lower()
+    valid_months = ["january", "february", "march", "april", "may", "june", "july", "august", "september", "october", "november", "december"]
+    if month not in valid_months:
+        return await message.reply(f"❌ Invalid month. Please use one of: {', '.join(valid_months)}")
+    
+    replied_message = message.reply_to_message
+    
+    file_id = None
+    text = None
+    buttons_json = None
+    
+    if replied_message.media:
+        file_info = get_file_id(replied_message)
+        if file_info:
+            file_id = file_info.file_id
+        text = replied_message.caption.html if replied_message.caption else None
+    elif replied_message.text:
+        text = replied_message.text.html
+    
+    if not text and not file_id:
+        return await message.reply("❌ The replied message must contain text or media.")
+    
+    # Extract buttons if any
+    if replied_message.reply_markup and replied_message.reply_markup.inline_keyboard:
+        # Convert InlineKeyboardMarkup to a string representation of a list of lists of dicts
+        buttons_list = []
+        for row in replied_message.reply_markup.inline_keyboard:
+            row_buttons = []
+            for button in row:
+                btn_dict = {"text": button.text}
+                if button.url:
+                    btn_dict["url"] = button.url
+                elif button.callback_data:
+                    btn_dict["callback_data"] = button.callback_data
+                row_buttons.append(btn_dict)
+            buttons_list.append(row_buttons)
+        buttons_json = str(buttons_list) # Store as string representation of list of lists of dicts
+    
+    await set_ott_message(month, text, buttons_json, file_id)
+    
+    await message.reply(f"✅ OTT Release Calendar message for <b>{month.capitalize()}</b> updated successfully!", parse_mode=enums.ParseMode.HTML)

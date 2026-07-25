@@ -473,63 +473,65 @@ def unpack_new_file_id(new_file_id: str) -> Tuple[str, str]:
     file_ref = encode_file_ref(decoded.file_reference)
     return file_id, file_ref
 
-async def delete_file_by_id(file_id: str, db_type: str = "default"):
+async def delete_file_by_id(raw_file_id: str):
     """
-    Delete a media document from the specified collection and its announcement entry.
-    Falls back to searching all databases if not found in the specified one.
+    Delete a media document from ALL collections and its announcement entry.
+    This function attempts to delete by both the raw file_id and the unpacked file_id
+    to handle legacy data.
     
     Args:
-        file_id: The database _id (unpacked file ID)
-        db_type: "default", "inline", or "pm"
+        raw_file_id: The raw Telegram file_id of the media.
     
     Returns:
-        (True, file_name) if deletion successful
-        (False, None) if file not found or error occurred
+        (True, file_name) if deletion was successful in at least one DB.
+        (False, None) if file not found or error occurred.
     """
+    unpacked_file_id = None
     try:
-        # List of database types to search (try specified first, then others)
-        db_types_to_search = [db_type]
-        if db_type != "default":
-            db_types_to_search.append("default")
-        if db_type != "inline":
-            db_types_to_search.append("inline")
-        if db_type != "pm":
-            db_types_to_search.append("pm")
-        
-        file_name = None
-        found_db_type = None
-        
-        # Search all databases for the file
-        for search_db_type in db_types_to_search:
-            collection = get_collection(search_db_type)
-            doc = await collection.find_one({"_id": file_id})
-            if doc:
-                file_name = doc.get("file_name", "")
-                found_db_type = search_db_type
-                logger.info(f"📍 Found file in {search_db_type} database (searched as {db_type})")
-                break
-        
-        if not found_db_type:
-            logger.warning(f"⚠️  File not found for deletion: {file_id} in any database")
-            return False, None
-        
-        # Remove announcement entry if applicable
-        if file_name:
-            normalized_title = _announcement_key(file_name)
-            if normalized_title:
-                delete_result = await get_db().announced_titles.delete_one({"_id": normalized_title})
+        unpacked_file_id, _ = unpack_new_file_id(raw_file_id)
+    except Exception:
+        logger.warning(f"Could not unpack file_id '{raw_file_id}'. Will try to delete by raw ID only.")
+
+    ids_to_try = [raw_file_id]
+    if unpacked_file_id and unpacked_file_id not in ids_to_try:
+        ids_to_try.append(unpacked_file_id)
+
+    try:
+        all_db_types = ["default", "inline", "pm"]
+        deleted_count = 0
+        file_name_for_reply = None
+
+        # Loop through all databases and attempt to delete the file using all possible IDs
+        for file_id_to_delete in ids_to_try:
+            for db_type_to_search in all_db_types:
+                collection = get_collection(db_type_to_search)
+                
+                # Atomically find and delete the document
+                deleted_doc = await collection.find_one_and_delete({"_id": file_id_to_delete})
+                
+                if deleted_doc:
+                    deleted_count += 1
+                    # Store the file name from the first document we find for the reply message
+                    if not file_name_for_reply:
+                        file_name_for_reply = deleted_doc.get("file_name", "")
+                    
+                    logger.info(f"🗑️ Deleted file '{file_name_for_reply}' (ID: {file_id_to_delete}) from '{db_type_to_search}' collection.")
+
+        # If we deleted the file from at least one database
+        if deleted_count > 0:
+            # Also remove its announcement entry to allow re-broadcasting if it's indexed again
+            if file_name_for_reply:
+                normalized_title = _announcement_key(file_name_for_reply)
+                announcement_coll = get_db().announced_titles
+                delete_result = await announcement_coll.delete_one({"_id": normalized_title})
                 if delete_result.deleted_count > 0:
-                    logger.info(f"🗑️  Removed announcement entry: {normalized_title}")
-        
-        # Delete the media document from the correct collection
-        collection = get_collection(found_db_type)
-        result = await collection.delete_one({"_id": file_id})
-        if result.deleted_count > 0:
-            logger.info(f"🗑️  Deleted from {found_db_type} collection: {file_name or file_id}")
-            return True, file_name or file_id
+                    logger.info(f"🗑️ Removed announcement entry for '{normalized_title}'.")
+            
+            return True, file_name_for_reply or raw_file_id
         else:
-            logger.warning(f"⚠️  File not found for deletion: {file_id} in {found_db_type}")
+            logger.warning(f"⚠️ File with ID '{raw_file_id}' (and unpacked variants) not found in any database for deletion.")
             return False, None
+
     except Exception as e:
-        logger.exception(f"❌ Error deleting file {file_id} from {db_type}: {e}")
+        logger.exception(f"❌ Error during deletion of file ID '{raw_file_id}': {e}")
         return False, None

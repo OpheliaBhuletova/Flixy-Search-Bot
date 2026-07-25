@@ -145,7 +145,7 @@ def schedule_delete_message(client, chat_id: int, message_id: int, delay_seconds
             await asyncio.sleep(delay_seconds)
             await client.delete_messages(chat_id, message_id)
         except Exception as e:
-            logger.debug("Could not auto-delete message %s in %s: %s", message_id, chat_id, e)
+            logger.warning("Could not auto-delete message %s in %s: %s", message_id, chat_id, e)
 
     try:
         asyncio.create_task(_del())

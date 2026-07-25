@@ -9,13 +9,14 @@ from typing import AsyncGenerator, Optional, Union
 import aiohttp
 from aiohttp import web
 from pyrogram import Client, __version__, idle, enums
-from pyrogram.errors import FloodWait, PeerIdInvalid
+from pyrogram.errors import FloodWait, PeerIdInvalid, MessageNotModified
 
 from bot.config import LOG_STR, settings
 from bot.utils.cache import RuntimeCache
-from bot.utils.helpers import schedule_delete_message
+from bot.utils.helpers import get_size, schedule_delete_message
+from database.ott_db import ensure_ott_indexes # New import
 from pyrogram.types import InlineKeyboardButton, InlineKeyboardMarkup
-from database.ia_filterdb import Media
+from database.ia_filterdb import Media, get_inline_collection, get_pm_collection
 from database.users_chats_db import get_db_instance
 from plugins import web_server
 
@@ -36,7 +37,8 @@ PORT = int(os.getenv("PORT", 8080))
 
 
 # ─── Startup log helper (Pyrogram -> Bot API fallback) ────────────────
-async def botapi_send_message(token: str, chat_id: int, text: str) -> None:
+async def botapi_send_message(token: str, chat_id: int, text: str, reply_markup: dict = None) -> None:
+    import json
     url = f"https://api.telegram.org/bot{token}/sendMessage"
     payload = {
         "chat_id": chat_id,
@@ -44,6 +46,9 @@ async def botapi_send_message(token: str, chat_id: int, text: str) -> None:
         "parse_mode": "HTML",
         "disable_web_page_preview": True,
     }
+    if reply_markup:
+        payload["reply_markup"] = json.dumps(reply_markup)
+
     async with aiohttp.ClientSession() as session:
         async with session.post(url, data=payload) as resp:
             data = await resp.json()
@@ -51,7 +56,7 @@ async def botapi_send_message(token: str, chat_id: int, text: str) -> None:
                 raise RuntimeError(data)
 
 
-async def send_startup_log(app: Client, chat_id: int, text: str):
+async def send_startup_log(app: Client, chat_id: int, text: str, reply_markup=None):
     """Send a startup notification and return the sent Message if available.
 
     Falls back to Bot API on PeerIdInvalid, in which case ``None`` is returned
@@ -63,6 +68,7 @@ async def send_startup_log(app: Client, chat_id: int, text: str):
             text,
             parse_mode=enums.ParseMode.HTML,
             disable_web_page_preview=True,
+            reply_markup=reply_markup,
         )
         return msg
     except Exception as e:
@@ -70,7 +76,11 @@ async def send_startup_log(app: Client, chat_id: int, text: str):
             raise
 
     # fallback: Bot API can't give us a message object
-    await botapi_send_message(app.bot_token, chat_id, text)
+    reply_markup_dict = None
+    if reply_markup:
+        reply_markup_dict = reply_markup.to_dict()
+
+    await botapi_send_message(app.bot_token, chat_id, text, reply_markup=reply_markup_dict)
     return None
 
 
@@ -121,6 +131,78 @@ class Bot(Client):
             plugins={"root": "plugins"},
             sleep_threshold=5,
         )
+        self.status_update_task: Optional[asyncio.Task] = None
+
+    async def _update_status_message(self):
+        """Periodically update the live status message."""
+        db = get_db_instance()
+        while True:
+            await asyncio.sleep(300)  # Update every 5 minutes
+
+            if not (RuntimeCache.status_message_id and RuntimeCache.status_message_chat_id):
+                continue
+
+            try:
+                # 1. Uptime
+                uptime_seconds = (datetime.now() - RuntimeCache.startup_time).total_seconds()
+                days, remainder = divmod(int(uptime_seconds), 86400)
+                hours, remainder = divmod(remainder, 3600)
+                minutes, seconds = divmod(remainder, 60)
+                uptime_str = f"{days}d {hours}h {minutes}m {seconds}s"
+
+                # 2. Database Stats
+                movies_collection = get_inline_collection()
+                movies_count = await movies_collection.count_documents({})
+                movies_size_agg = await movies_collection.aggregate([{"$group": {"_id": None, "total_size": {"$sum": "$file_size"}}}]).to_list(length=1)
+                movies_total_size = movies_size_agg[0]['total_size'] if movies_size_agg else 0
+
+                series_collection = get_pm_collection()
+                series_count = await series_collection.count_documents({})
+                series_size_agg = await series_collection.aggregate([{"$group": {"_id": None, "total_size": {"$sum": "$file_size"}}}]).to_list(length=1)
+                series_total_size = series_size_agg[0]['total_size'] if series_size_agg else 0
+
+                total_files = movies_count + series_count
+                total_size = movies_total_size + series_total_size
+
+                # 3. User Stats
+                total_users = await db.total_users_count()
+                total_chats = await db.total_chat_count()
+
+                # Channel counts
+                total_channels = len(settings.MOVIES_CHANNELS) + len(settings.SERIES_CHANNELS)
+
+                # 4. Ping
+                ping_start = time.perf_counter()
+                await self.get_me()
+                ping_ms = (time.perf_counter() - ping_start) * 1000
+
+                status_message_text = (
+                    f"📊 <b>Flixy Live Status</b>\n\n"
+                    f"<b>Bot Status:</b> <code>Online</code>\n"
+                    f"<b>Uptime:</b> <code>{uptime_str}</code>\n"
+                    f"<b>Ping:</b> <code>{ping_ms:.2f} ms</code>\n\n"
+                    f"🗄 <b>Database Summary</b>\n"
+                    f"• <b>Total Files:</b> <code>{total_files:,}</code>\n"
+                    f"• <b>Total Users:</b> <code>{total_users:,}</code>\n"
+                    f"• <b>Total Channels:</b> <code>{total_channels}</code>\n"
+                    f"• <b>Total Group Chats:</b> <code>{total_chats:,}</code>"
+                )
+
+                await self.edit_message_text(
+                    chat_id=RuntimeCache.status_message_chat_id,
+                    message_id=RuntimeCache.status_message_id,
+                    text=status_message_text,
+                    parse_mode=enums.ParseMode.HTML,
+                    disable_web_page_preview=True
+                )
+                logger.info("Updated live status message.")
+            except MessageNotModified:
+                pass  # No changes, do nothing
+            except asyncio.CancelledError:
+                logger.info("Status update task cancelled.")
+                break
+            except Exception:
+                logger.exception("Failed to update live status message.")
 
     async def start(self):
         RuntimeCache.startup_time = datetime.now()
@@ -137,6 +219,11 @@ class Bot(Client):
             await db.ensure_indexes()
         except Exception:
             logger.exception("Failed to ensure user/chat indexes")
+        
+        try:
+            await ensure_ott_indexes() # Ensure indexes for OTT messages
+        except Exception:
+            logger.exception("Failed to ensure OTT messages indexes")
 
         RuntimeCache.banned_users, RuntimeCache.banned_chats = await db.get_banned()
         # make sure sudo users are not accidentally treated as banned
@@ -231,6 +318,70 @@ class Bot(Client):
             except Exception:
                 logger.exception("Failed to send startup log to LOG_CHANNEL")
 
+        # Send live status message to the intro channel
+        try:
+            intro_channel_id = -1004354755471
+
+            # 1. Uptime
+            uptime_seconds = (datetime.now() - RuntimeCache.startup_time).total_seconds()
+            days, remainder = divmod(int(uptime_seconds), 86400)
+            hours, remainder = divmod(remainder, 3600)
+            minutes, seconds = divmod(remainder, 60)
+            uptime_str = f"{days}d {hours}h {minutes}m {seconds}s"
+
+            # 2. Database Stats
+            movies_collection = get_inline_collection()
+            movies_count = await movies_collection.count_documents({})
+            movies_size_agg = await movies_collection.aggregate([{"$group": {"_id": None, "total_size": {"$sum": "$file_size"}}}]).to_list(length=1)
+            movies_total_size = movies_size_agg[0]['total_size'] if movies_size_agg else 0
+
+            series_collection = get_pm_collection()
+            series_count = await series_collection.count_documents({})
+            series_size_agg = await series_collection.aggregate([{"$group": {"_id": None, "total_size": {"$sum": "$file_size"}}}]).to_list(length=1)
+            series_total_size = series_size_agg[0]['total_size'] if series_size_agg else 0
+
+            total_files = movies_count + series_count
+            total_size = movies_total_size + series_total_size
+
+            # 3. User Stats
+            total_users = await db.total_users_count()
+            total_chats = await db.total_chat_count()
+
+            # Channel counts
+            total_channels = len(settings.MOVIES_CHANNELS) + len(settings.SERIES_CHANNELS)
+
+            # 4. Ping
+            ping_start = time.perf_counter()
+            await self.get_me()
+            ping_ms = (time.perf_counter() - ping_start) * 1000
+
+            status_message_text = (
+                f"📊 <b>Flixy Live Status</b>\n\n"
+                f"<b>Bot Status:</b> <code>Online</code>\n"
+                f"<b>Uptime:</b> <code>{uptime_str}</code>\n"
+                f"<b>Ping:</b> <code>{ping_ms:.2f} ms</code>\n\n"
+                f"🗄 <b>Database Summary</b>\n"
+                f"• <b>Total Files:</b> <code>{total_files:,}</code>\n"
+                f"• <b>Total Users:</b> <code>{total_users:,}</code>\n"
+                f"• <b>Total Channels:</b> <code>{total_channels}</code>\n"
+                f"• <b>Total Group Chats:</b> <code>{total_chats:,}</code>"
+            )
+
+            status_message = await send_startup_log(self, intro_channel_id, status_message_text)
+            if status_message:
+                RuntimeCache.status_message_id = status_message.id
+                RuntimeCache.status_message_chat_id = status_message.chat.id
+                logger.info(f"Sent live status message to {intro_channel_id} (msg_id: {status_message.id})")
+                self.status_update_task = asyncio.create_task(self._update_status_message())
+            else:
+                logger.warning(
+                    f"Could not get message ID for status message sent to {intro_channel_id}. "
+                    "This may happen if the bot is not a member of the channel. "
+                    "Auto-deletion on shutdown will not work."
+                )
+        except Exception:
+            logger.exception(f"Failed to send live status message to channel {intro_channel_id}")
+
         # Start periodic ad sender if channels are configured
         if getattr(settings, "AD_CHANNEL", None):
             async def _ad_sender(app: Client):
@@ -291,6 +442,19 @@ class Bot(Client):
         await asyncio.Event().wait()
 
     async def stop(self, *args):
+        if self.status_update_task:
+            self.status_update_task.cancel()
+
+        if RuntimeCache.status_message_id and RuntimeCache.status_message_chat_id:
+            try:
+                await self.delete_messages(
+                    chat_id=RuntimeCache.status_message_chat_id,
+                    message_ids=RuntimeCache.status_message_id,
+                )
+                logger.info("Deleted live status message on shutdown.")
+            except Exception:
+                logger.exception("Failed to delete live status message on shutdown.")
+
         await super().stop()
         logger.info("Bot stopped. Bye.")
 

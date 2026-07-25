@@ -10,9 +10,9 @@ class Texts:
     # ───────────────────────────────────
 
     START_TXT = """
-👋 Hi {}, welcome to <b>F L I X Y</b>
+Hi {}, welcome to <b>F L I X Y</b>.
 
-🎬 Use inline search for movies, and 📩 DM me the series name for TV shows.
+Use inline search for movies and send me a direct message for TV series.
 """
 
     HELP_TXT = """
@@ -191,17 +191,18 @@ Restricted commands for bot administrators.
 📝 **Commands**
 • `/logs` — view recent error logs  
 • `/stats` — database statistics  
-• `/delete` — remove a file from database  
+• `/delete` — remove a file from all databases and reset its broadcast status  
 • `/users` — list bot users  
 • `/groupchats` — list connected group chats  
 • `/leave` — leave a chat  
 • `/disable` — disable a chat  
 • `/ban` — ban a user  
 • `/unban` — unban a user  
-• `/channel` — list connected channels  
+• `/channels` — list connected channels  
 • `/setstartup` — set startup image for /start command
 • `/deleteallimages` — delete all saved startup images
 • `/broadcast` — broadcast a message
+• `/msg <user_id> "text"` — send a message to a user
 """
 
     # ───────────────────────────────────
@@ -209,13 +210,12 @@ Restricted commands for bot administrators.
     # ───────────────────────────────────
 
     STATUS_TXT = """
-📊 **Bot Status**
+📊 <b>Bot Status</b>
 
-• **Total Files:** `{}`  
-• **Total Users:** `{}`  
-• **Total Chats:** `{}`  
-• **Used Storage:** `{}`  
-• **Free Storage:** `{}`  
+• <b>Total Files:</b> <code>{:,}</code>
+• <b>Total Users:</b> <code>{}</code>
+• <b>Total Channels:</b> <code>{}</code>
+• <b>Total Group Chats:</b> <code>{}</code>
 """
 
     LOG_TEXT_G = """

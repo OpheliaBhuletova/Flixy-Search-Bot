@@ -19,3 +19,5 @@ class RuntimeCache:
     startup_time: Any = None
     index_skip: int = 0
     ad_enabled: bool = False
+    status_message_id: int | None = None
+    status_message_chat_id: int | None = None

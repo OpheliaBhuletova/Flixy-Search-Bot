@@ -9,7 +9,7 @@ from pyrogram.errors.exceptions.bad_request_400 import (
 from bot.config import settings
 from database.users_chats_db import db
 from database.connections_mdb import all_connections
-from database.ia_filterdb import Media
+from database.ia_filterdb import Media, get_inline_collection, get_pm_collection
 from bot.utils.cache import RuntimeCache
 from bot.utils.helpers import get_size, get_settings, schedule_delete_message
 from bot.utils.messages import Texts as Text
@@ -207,19 +207,28 @@ async def enable_chat_handler(client: Client, message):
     await message.reply("Chat successfully re-enabled")
 
 
-@Client.on_message(filters.command("stats"))
+@Client.on_message(filters.command("stats") & filters.user(settings.ADMINS))
 async def stats_handler(client: Client, message):
     msg = await message.reply("Fetching stats...")
+
+    # User and Chat counts
     users = await db.total_users_count()
     chats = await db.total_chat_count()
-    files = await Media.count_documents()
-    size = await db.get_db_size()
-    free = get_size(536870912 - size)
+
+    # File counts from both databases
+    movies_collection = get_inline_collection()
+    movies_count = await movies_collection.count_documents({})
+
+    series_collection = get_pm_collection()
+    series_count = await series_collection.count_documents({})
+
+    total_files = movies_count + series_count
+
+    # Channel counts
+    total_channels = len(settings.MOVIES_CHANNELS) + len(settings.SERIES_CHANNELS)
 
     await msg.edit(
-        Text.STATUS_TXT.format(
-            files, users, chats, get_size(size), free
-        )
+        Text.STATUS_TXT.format(total_files, users, total_channels, chats)
     )
 
 
