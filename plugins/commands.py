@@ -6,20 +6,22 @@ import html
 import aiohttp
 
 from pyrogram import Client, filters, enums
-from pyrogram.types import CallbackQuery
-from pyrogram.types import InlineKeyboardButton, InlineKeyboardMarkup, Message, KeyboardButton, ReplyKeyboardMarkup
+from pyrogram.types import CallbackQuery, InlineKeyboardButton, KeyboardButton, ReplyKeyboardMarkup, Message
 from pyrogram.errors import PeerIdInvalid, MessageNotModified, QueryIdInvalid
 
 from bot.utils.ott_releases import OTT_RELEASE_CALENDAR
 from bot.config import settings
 from bot.utils.messages import Texts
 from bot.utils.cache import RuntimeCache
-from bot.utils.helpers import get_file_id
+from bot.utils.helpers import (
+    build_close_button_row,
+    build_inline_markup,
+    build_start_buttons,
+    get_file_id,
+)
 from bot.services.metadata_service import get_imdb_info, search_tmdb_titles
-from database.ia_filterdb import delete_file_by_id, unpack_new_file_id
-
+from database.ia_filterdb import delete_file_by_id, delete_file as db_delete_file, unpack_new_file_id
 from database.users_chats_db import db
-from database.ia_filterdb import delete_file as db_delete_file, unpack_new_file_id
 
 logger = logging.getLogger(__name__)
 
@@ -258,7 +260,7 @@ async def request_command_handler(client: Client, message: Message):
             log_channel,
             log_text,
             parse_mode=enums.ParseMode.HTML,
-            reply_markup=InlineKeyboardMarkup(buttons),
+            reply_markup=build_inline_markup(buttons),
         )
     except Exception as e:
         logger.exception(f"Failed to send request to LOG_CHANNEL: {e}")
@@ -527,7 +529,7 @@ async def delete_file_handler(client: Client, message: Message):
 
 
 async def send_text_start(message: Message, buttons):
-    reply_markup = InlineKeyboardMarkup(buttons)
+    reply_markup = build_inline_markup(buttons)
     ott_months = list(OTT_RELEASE_CALENDAR.keys())
     keyboard = []
     # Create rows with 4 buttons each
@@ -681,7 +683,7 @@ async def publish_updates_handler(client: Client, message: Message):
                         photo=replied_message.photo.file_id,
                         caption=formatted_caption,
                         parse_mode=enums.ParseMode.HTML,
-                        reply_markup=InlineKeyboardMarkup(buttons)
+                        reply_markup=build_inline_markup(buttons)
                     )
                 else:
                     await client.send_photo(
@@ -854,10 +856,7 @@ async def _get_watchlist_message_and_buttons(user_id: int):
     
     if not watchlist:
         text = "Your watchlist is empty. Use /addwatchlist to add TV series."
-        buttons = [[
-            InlineKeyboardButton("◀️ BACK", callback_data="start", style=enums.ButtonStyle.PRIMARY),
-            InlineKeyboardButton("🔐 CLOSE", callback_data="close_data", style=enums.ButtonStyle.DANGER)
-        ]]
+        buttons = [build_close_button_row("start")]
         return text, buttons
 
     text = "📺 YOUR WATCHLIST\n────────────────\n\n"
@@ -910,10 +909,7 @@ async def _get_watchlist_message_and_buttons(user_id: int):
     shows_count = len(watchlist)
     text += f"<code>────────────────\n{shows_count} shows • Updated just now</code>"
     
-    buttons.append([
-        InlineKeyboardButton("◀️ Back", callback_data="start", style=enums.ButtonStyle.PRIMARY),
-        InlineKeyboardButton("🔐 Close", callback_data="close_data", style=enums.ButtonStyle.DANGER)
-    ])
+    buttons.append(build_close_button_row("start"))
     return text, buttons
 
 
@@ -930,7 +926,7 @@ async def my_watchlist_start_callback_handler(client: Client, callback: Callback
     try:
         await callback.message.edit_text(
             text,
-            reply_markup=InlineKeyboardMarkup(buttons),
+            reply_markup=build_inline_markup(buttons),
             parse_mode=enums.ParseMode.HTML,
             disable_web_page_preview=True,
         )
@@ -945,7 +941,7 @@ async def my_watchlist_handler(client: Client, message: Message):
 
     await message.reply(
         text,
-        reply_markup=InlineKeyboardMarkup(buttons),
+        reply_markup=build_inline_markup(buttons),
         parse_mode=enums.ParseMode.HTML,
         disable_web_page_preview=True,
     )
@@ -993,7 +989,7 @@ async def add_watchlist_handler(client: Client, message: Message):
             )
         await message.reply(
             f"Multiple TV series found for '{html.escape(query)}'. Please select one:",
-            reply_markup=InlineKeyboardMarkup(buttons),
+            reply_markup=build_inline_markup(buttons),
         )
 
 
@@ -1044,51 +1040,6 @@ async def watchlist_add_callback_handler(client: Client, callback: CallbackQuery
         pass  # Message might have been deleted or edited by another user
 
 
-@Client.on_message(filters.command("mywatchlist") & filters.private)
-async def my_watchlist_handler(client: Client, message: Message):
-    """Displays the user's watchlist."""
-    watchlist = await db.get_watchlist(message.from_user.id)
-
-    if not watchlist:
-        return await message.reply("Your watchlist is empty. Use /addwatchlist to add TV series.")
-
-    text = "📺 Your Watchlist:\n\n"
-    buttons = []
-    for item in watchlist:
-        tmdb_id = item['tmdb_id']
-        media_type = item['media_type']
-        
-        # Fetch details for display
-        series_info = await get_imdb_info(f"{media_type} {tmdb_id}", id=True)
-        if series_info:
-            title = series_info.get("title", f"Series ID: {tmdb_id}")
-            year = series_info.get("year", "")
-            text += f"• <a href='{series_info['url']}'>{title}</a> ({year})\n"
-            buttons.append(
-                [
-                    InlineKeyboardButton(
-                        text=f"Remove {title}",
-                        callback_data=f"watchlist_remove#{media_type}#{tmdb_id}",
-                        style=enums.ButtonStyle.DANGER,
-                    )
-                ]
-            )
-        else:
-            text += f"• Unknown Series (ID: {tmdb_id})\n"
-            buttons.append(
-                [InlineKeyboardButton(text=f"Remove Unknown Series (ID: {tmdb_id})", callback_data=f"watchlist_remove#{media_type}#{tmdb_id}", style=enums.ButtonStyle.DANGER)]
-            )
-    
-    buttons.append([InlineKeyboardButton("🔐 Close", callback_data="close_data", style=enums.ButtonStyle.DANGER)])
-
-    await message.reply(
-        text,
-        reply_markup=InlineKeyboardMarkup(buttons),
-        parse_mode=enums.ParseMode.HTML,
-        disable_web_page_preview=True,
-    )
-
-
 @Client.on_callback_query(filters.regex("^watchlist_remove#"))
 async def watchlist_remove_callback_handler(client: Client, callback: CallbackQuery):
     """Handles callback for removing a series from watchlist."""
@@ -1119,7 +1070,7 @@ async def watchlist_remove_callback_handler(client: Client, callback: CallbackQu
         try:
             await callback.message.edit_text(
                 text,
-                reply_markup=InlineKeyboardMarkup(buttons),
+                reply_markup=build_inline_markup(buttons),
                 parse_mode=enums.ParseMode.HTML,
                 disable_web_page_preview=True,
             )
@@ -1153,7 +1104,7 @@ async def start_handler(client: Client, message: Message):
 
         await message.reply(
             group_start_text,
-            reply_markup=InlineKeyboardMarkup(buttons),
+            reply_markup=build_inline_markup(buttons),
             parse_mode=enums.ParseMode.MARKDOWN,
         )
 
@@ -1216,16 +1167,7 @@ async def start_handler(client: Client, message: Message):
         logger.exception("User registration check failed during /start")
 
     if len(message.command) != 2:
-        buttons = [
-            [
-                InlineKeyboardButton("🔍 Search", switch_inline_query_current_chat="", style=enums.ButtonStyle.SUCCESS),
-                InlineKeyboardButton("👀 Watchlist", callback_data="mywatchlist_start", style=enums.ButtonStyle.PRIMARY),
-            ],
-            [
-                InlineKeyboardButton("ℹ️ About", callback_data="about", style=enums.ButtonStyle.PRIMARY),
-                InlineKeyboardButton("📖 Help", callback_data="help", style=enums.ButtonStyle.DANGER),
-            ],
-        ]
+        buttons = build_start_buttons()
 
         ott_months = list(OTT_RELEASE_CALENDAR.keys())
         keyboard = []
@@ -1259,7 +1201,7 @@ async def start_handler(client: Client, message: Message):
             await message.reply_photo(
                 pic_to_use,
                 caption=start_caption,
-                reply_markup=InlineKeyboardMarkup(buttons),
+                reply_markup=build_inline_markup(buttons),
                 parse_mode=enums.ParseMode.HTML,
             )
             await message.reply_text(

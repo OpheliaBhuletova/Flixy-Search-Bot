@@ -8,9 +8,9 @@ from pyrogram.errors import (
     PeerIdInvalid,
     FloodWait,
 )
-from pyrogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton
+from pyrogram.types import Message, InlineKeyboardButton
 from bot.utils.cache import RuntimeCache
-from bot.utils.helpers import schedule_delete_message
+from bot.utils.helpers import build_inline_markup, schedule_delete_message
 from bot.config import settings
 from database.users_chats_db import db
 
@@ -126,7 +126,7 @@ async def new_movie_broadcast(client: Client, title: str, message: Message = Non
                     msg_text,
                     parse_mode=enums.ParseMode.HTML,
                     disable_web_page_preview=True,
-                    reply_markup=InlineKeyboardMarkup(buttons),
+                    reply_markup=build_inline_markup(buttons),
                 )
                 success += 1
         except InputUserDeactivated:

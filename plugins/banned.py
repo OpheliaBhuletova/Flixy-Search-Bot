@@ -1,7 +1,8 @@
-from pyrogram import Client, filters
-from pyrogram.types import Message, InlineKeyboardButton, InlineKeyboardMarkup
+from pyrogram import Client, filters, enums
+from pyrogram.types import Message
 
 from bot.utils.cache import RuntimeCache
+from bot.utils.helpers import build_inline_markup, build_support_button_row
 from database.users_chats_db import db
 from bot.config import settings
 
@@ -44,14 +45,7 @@ async def ban_reply(client: Client, message: Message):
 
 @Client.on_message(filters.group & disabled_group & filters.incoming)
 async def grp_bd(client: Client, message: Message):
-    buttons = [[
-        InlineKeyboardButton(
-            text="Support",
-            url=f"https://t.me/{settings.SUPPORT_CHAT}",
-            style=enums.ButtonStyle.SUCCESS
-        )
-    ]]
-    reply_markup = InlineKeyboardMarkup(buttons)
+    reply_markup = build_inline_markup(build_support_button_row(settings.SUPPORT_CHAT))
 
     chat_data = await db.get_chat(message.chat.id)
 

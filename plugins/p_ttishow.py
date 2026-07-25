@@ -1,7 +1,7 @@
 import logging
 from pyrogram import Client, filters, enums
 import os
-from pyrogram.types import InlineKeyboardButton, InlineKeyboardMarkup
+from pyrogram.types import InlineKeyboardButton
 from pyrogram.errors.exceptions.bad_request_400 import (
     MessageTooLong,
 )
@@ -11,7 +11,13 @@ from database.users_chats_db import db
 from database.connections_mdb import all_connections
 from database.ia_filterdb import Media
 from bot.utils.cache import RuntimeCache
-from bot.utils.helpers import get_size, get_settings, schedule_delete_message
+from bot.utils.helpers import (
+    build_inline_markup,
+    build_support_button_row,
+    get_size,
+    get_settings,
+    schedule_delete_message,
+)
 from bot.utils.messages import Texts as Text
 from bot.main import get_chat_info
 
@@ -46,9 +52,7 @@ async def on_bot_added(client: Client, message):
                     logger.exception("Failed to send new group notification to LOG_CHANNEL")
 
         if message.chat.id in RuntimeCache.banned_chats:
-            markup = InlineKeyboardMarkup(
-                [[InlineKeyboardButton("Support", url=f"https://t.me/{settings.SUPPORT_CHAT}", style=enums.ButtonStyle.SUCCESS)]]
-            )
+            markup = build_inline_markup(build_support_button_row(settings.SUPPORT_CHAT))
             msg = await message.reply(
                 "<b>CHAT NOT ALLOWED \U0001f41e\n\n"
                 "My admins have restricted me from working here.</b>",
@@ -61,7 +65,7 @@ async def on_bot_added(client: Client, message):
             await client.leave_chat(message.chat.id)
             return
 
-        markup = InlineKeyboardMarkup(
+        markup = build_inline_markup(
             [[
                 InlineKeyboardButton(
                     "ℹ️ Help",
@@ -106,9 +110,7 @@ async def leave_chat_handler(client: Client, message):
     except ValueError:
         pass
 
-    markup = InlineKeyboardMarkup(
-        [[InlineKeyboardButton("Support", url=f"https://t.me/{settings.SUPPORT_CHAT}", style=enums.ButtonStyle.SUCCESS)]]
-    )
+    markup = build_inline_markup(build_support_button_row(settings.SUPPORT_CHAT))
     
     try:
         await client.send_message(
@@ -158,9 +160,7 @@ async def disable_chat_handler(client: Client, message):
     await db.disable_chat(chat, reason)
     RuntimeCache.banned_chats.add(chat)
 
-    markup = InlineKeyboardMarkup(
-        [[InlineKeyboardButton("Support", url=f"https://t.me/{settings.SUPPORT_CHAT}", style=enums.ButtonStyle.SUCCESS)]]
-    )
+    markup = build_inline_markup(build_support_button_row(settings.SUPPORT_CHAT))
     
     try:
         await client.send_message(

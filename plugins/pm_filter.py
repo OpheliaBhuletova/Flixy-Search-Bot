@@ -5,7 +5,7 @@ import math
 import logging 
 
 from pyrogram import Client, filters, enums
-from pyrogram.types import InlineKeyboardMarkup, InlineKeyboardButton, CallbackQuery, Message
+from pyrogram.types import InlineKeyboardButton, CallbackQuery, Message
 from pyrogram.errors import FloodWait, UserIsBlocked, MessageNotModified, PeerIdInvalid
 from pyrogram.errors.exceptions.bad_request_400 import (
     MediaEmpty,
@@ -270,7 +270,7 @@ async def next_page(client: Client, query: CallbackQuery):
 
     try:
         await query.edit_message_reply_markup(
-            InlineKeyboardMarkup(buttons)
+            build_inline_markup(buttons)
         )
     except MessageNotModified:
         pass
@@ -453,27 +453,27 @@ async def auto_filter(client: Client, message, spoll=None):
     if imdb and imdb.get("poster"):
         try:
             await message.reply_photo(
-                imdb["poster"], caption[:1024], reply_markup=InlineKeyboardMarkup(buttons)
+                imdb["poster"], caption[:1024], reply_markup=build_inline_markup(buttons)
             )
         except (MediaEmpty, PhotoInvalidDimensions, WebpageMediaEmpty):
             if not imdb:
                 await message.reply_text(
                     caption,
-                    reply_markup=InlineKeyboardMarkup(buttons),
+                    reply_markup=build_inline_markup(buttons),
                     parse_mode=enums.ParseMode.HTML,
                 )
             else:
-                await message.reply_text(caption, reply_markup=InlineKeyboardMarkup(buttons))
+                await message.reply_text(caption, reply_markup=build_inline_markup(buttons))
     else:
         # When no IMDb/template is used, caption contains HTML and should be sent as HTML
         if not imdb:
             await message.reply_text(
                 caption,
-                reply_markup=InlineKeyboardMarkup(buttons),
+                reply_markup=build_inline_markup(buttons),
                 parse_mode=enums.ParseMode.HTML,
             )
         else:
-            await message.reply_text(caption, reply_markup=InlineKeyboardMarkup(buttons))
+            await message.reply_text(caption, reply_markup=build_inline_markup(buttons))
 
 
 # ---------------- SPELL CHECK ---------------- #
@@ -496,7 +496,7 @@ async def spell_check(message):
 
     await message.reply(
         "Did you mean:",
-        reply_markup=InlineKeyboardMarkup(buttons),
+        reply_markup=build_inline_markup(buttons),
     )
 
 
@@ -512,7 +512,7 @@ async def manual_filters(client: Client, message, text=None):
             reply_text, btn, alert, fileid = await find_filter(group_id, keyword)
 
             reply_text = reply_text.replace("\\n", "\n") if reply_text else ""
-            markup = InlineKeyboardMarkup(ast.literal_eval(btn)) if btn not in ("[]", None) else None
+            markup = build_inline_markup(ast.literal_eval(btn)) if btn not in ("[]", None) else None
 
             if fileid and fileid != "None":
                 await message.reply_cached_media(fileid, caption=reply_text, reply_markup=markup)
