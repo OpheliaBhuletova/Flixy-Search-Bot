@@ -149,7 +149,7 @@ async def list_filters_handler(client: Client, message: Message):
             text, quote=True, parse_mode=enums.ParseMode.MARKDOWN
         )
 
-@Client.on_message(filters.command(["del", "delete"]) & filters.incoming)
+@Client.on_message(filters.command(["del", "delfilter"]) & filters.incoming)
 async def delete_filter_handler(client: Client, message: Message):
     user_id = message.from_user.id if message.from_user else None
     if not user_id:

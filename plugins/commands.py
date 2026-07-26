@@ -13,9 +13,14 @@ from pyrogram.errors import PeerIdInvalid, MessageNotModified, QueryIdInvalid, U
 from bot.config import settings
 from bot.utils.messages import Texts
 from bot.utils.cache import RuntimeCache
-from bot.utils.helpers import get_file_id, schedule_delete_message
+from bot.utils.helpers import get_file_id, get_size, schedule_delete_message
 from bot.services.metadata_service import get_imdb_info, search_tmdb_titles
-from database.ia_filterdb import delete_file_by_id, unpack_new_file_id
+from database.ia_filterdb import (
+    delete_file_by_id,
+    get_inline_collection,
+    get_pm_collection,
+    unpack_new_file_id,
+)
 from database.users_chats_db import db
 
 logger = logging.getLogger(__name__)
@@ -164,6 +169,27 @@ async def delete_file_command(client: Client, message: Message):
     if not file_id:
         await message.reply("❌ Please reply to a file or provide a file_id to delete.")
         return
+
+    # Unpack the file_id to search in the database for logging purposes.
+    # The actual deletion function handles both packed and unpacked IDs.
+    try:
+        unpacked_id, _ = unpack_new_file_id(file_id)
+    except Exception:
+        unpacked_id = file_id  # Fallback to raw id if unpacking fails
+
+    # Find the file in DB to get details for logging
+    file_doc = None
+    db_type = None
+
+    inline_coll = get_inline_collection()
+    file_doc = await inline_coll.find_one({"_id": unpacked_id})
+    if file_doc:
+        db_type = "📌 MOVIES DB (moviesDB)"
+    else:
+        pm_coll = get_pm_collection()
+        file_doc = await pm_coll.find_one({"_id": unpacked_id})
+        if file_doc:
+            db_type = "💬 SERIES DB (seriesDB)"
         
     # Use the more robust deletion method that handles all DBs and announcement status
     success, deleted_file_name = await delete_file_by_id(file_id)
@@ -171,6 +197,37 @@ async def delete_file_command(client: Client, message: Message):
     if success:
         await message.reply(f"✅ File <b>{html.escape(deleted_file_name or 'N/A')}</b> successfully deleted from all databases.", parse_mode=enums.ParseMode.HTML)
         logger.info(f"Admin {message.from_user.id} deleted file {deleted_file_name} ({file_id}) from database.")
+
+        # Log deletion to LOG_CHANNEL
+        log_channel = getattr(settings, "LOG_CHANNEL", 0)
+        if log_channel:
+            try:
+                admin_user = message.from_user
+                admin_link = f"<a href='tg://user?id={admin_user.id}'>{admin_user.first_name}</a>"
+
+                if file_doc and db_type:
+                    title = file_doc.get("title", "N/A")
+                    file_name = file_doc.get("file_name", "N/A")
+                    file_size = get_size(file_doc.get("file_size", 0))
+
+                    log_msg = (
+                        f"🗑️ <b>File Deleted</b>\n\n"
+                        f"<b>DB:</b> {db_type}\n"
+                        f"<b>Title:</b> <code>{html.escape(title)}</code>\n"
+                        f"<b>File:</b> <code>{html.escape(file_name)}</code>\n"
+                        f"<b>Size:</b> <code>{file_size}</code>\n"
+                        f"<b>Deleted By:</b> {admin_link}"
+                    )
+                else:  # Fallback if file_doc wasn't found but deletion succeeded
+                    log_msg = (
+                        f"🗑️ <b>File Deleted</b>\n\n"
+                        f"<b>File Name:</b> <code>{html.escape(deleted_file_name or 'N/A')}</code>\n"
+                        f"<b>File ID:</b> <code>{file_id}</code>\n"
+                        f"<b>Deleted By:</b> {admin_link}"
+                    )
+                await client.send_message(log_channel, log_msg, parse_mode=enums.ParseMode.HTML)
+            except Exception as e:
+                logger.exception(f"Failed to log file deletion to LOG_CHANNEL: {e}")
     else:
         await message.reply("❌ <b>File not found in database or failed to delete.</b>", parse_mode=enums.ParseMode.HTML)
 

@@ -40,7 +40,7 @@ Manage automatic replies when keywords are detected in connected groups.
 
 • `/filter <keyword>` (reply to a message) — save a filter
 • `/filters` or `/viewfilters` — list active filters
-• `/delete <keyword>` — remove a filter
+• `/delfilter <keyword>` or `/del <keyword>` — remove a filter
 """
 
     HELP_CONNECTIONS_TXT = """
@@ -191,7 +191,7 @@ Restricted commands for bot administrators.
 📝 **Commands**
 • `/logs` — view recent error logs  
 • `/stats` — database statistics  
-• `/delete` — remove a file from all databases and reset its broadcast status  
+• `/delete` — remove a file from all databases and reset its broadcast status (reply to file)  
 • `/users` — list bot users  
 • `/groupchats` — list connected group chats  
 • `/leave` — leave a chat  
