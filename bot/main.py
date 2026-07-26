@@ -320,7 +320,7 @@ class Bot(Client):
 
         # Send live status message to the intro channel
         try:
-            intro_channel_id = -1004354755471
+            intro_channel_id = -1003865668861
 
             # 1. Uptime
             uptime_seconds = (datetime.now() - RuntimeCache.startup_time).total_seconds()

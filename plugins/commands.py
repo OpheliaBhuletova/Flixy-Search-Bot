@@ -945,7 +945,7 @@ async def watchlist_remove_callback_handler(client: Client, callback: CallbackQu
 
 @Client.on_callback_query(filters.regex(r"^check_joined$"))
 async def check_joined_handler(client: Client, query: CallbackQuery):
-    UPDATES_CHANNEL_ID = -1004354755471
+    UPDATES_CHANNEL_ID = -1003865668861
     try:
         user = await client.get_chat_member(UPDATES_CHANNEL_ID, query.from_user.id)
         if user.status == enums.ChatMemberStatus.BANNED:
@@ -1109,14 +1109,14 @@ async def start_handler(client: Client, message: Message):
         logger.exception("User registration check failed during /start")
 
     # Force Subscription
-    UPDATES_CHANNEL_ID = -1004354755471
+    UPDATES_CHANNEL_ID = -1003865668861
     try:
         member = await client.get_chat_member(UPDATES_CHANNEL_ID, message.from_user.id)
         if member.status == enums.ChatMemberStatus.BANNED:
             await message.reply_text("You are banned from the updates channel. Contact support.", quote=True)
             return
     except UserNotParticipant:
-        UPDATES_CHANNEL_INVITE_LINK = "https://t.me/+oTJ1aUw4ZRxmMDc9"
+        UPDATES_CHANNEL_INVITE_LINK = "https://t.me/+Cm-HYDSaLG81NjNl"
         buttons = [[
             InlineKeyboardButton("Join Updates Channel", url=UPDATES_CHANNEL_INVITE_LINK)
         ], [

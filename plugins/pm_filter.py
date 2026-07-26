@@ -71,14 +71,14 @@ async def private_message_router(client: Client, message: Message):
     existing auto_filter logic so users get the same results in PM.
     """
     # Force Subscription
-    UPDATES_CHANNEL_ID = -1004354755471
+    UPDATES_CHANNEL_ID = -1003865668861
     try:
         member = await client.get_chat_member(UPDATES_CHANNEL_ID, message.from_user.id)
         if member.status == enums.ChatMemberStatus.BANNED:
             await message.reply_text("You are banned from the updates channel. Contact support.", quote=True)
             return
     except UserNotParticipant:
-        UPDATES_CHANNEL_INVITE_LINK = "https://t.me/+oTJ1aUw4ZRxmMDc9"
+        UPDATES_CHANNEL_INVITE_LINK = "https://t.me/+Cm-HYDSaLG81NjNl"
         buttons = [[
             InlineKeyboardButton("Join Updates Channel", url=UPDATES_CHANNEL_INVITE_LINK)
         ], [

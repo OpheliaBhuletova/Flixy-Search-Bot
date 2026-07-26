@@ -33,7 +33,7 @@ async def inline_user_allowed(query: InlineQuery) -> bool:
 async def inline_query_handler(client: Client, query: InlineQuery):
     """Handle inline search queries"""
     # Force Subscription check
-    UPDATES_CHANNEL_ID = -1004354755471
+    UPDATES_CHANNEL_ID = -1003865668861
     try:
         await client.get_chat_member(UPDATES_CHANNEL_ID, query.from_user.id)
     except UserNotParticipant:
