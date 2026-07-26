@@ -371,6 +371,12 @@ class Bot(Client):
             if status_message:
                 RuntimeCache.status_message_id = status_message.id
                 RuntimeCache.status_message_chat_id = status_message.chat.id
+                try:
+                    await status_message.pin()
+                    logger.info(f"Pinned live status message in {intro_channel_id}")
+                except Exception:
+                    logger.exception(f"Failed to pin live status message in {intro_channel_id}")
+
                 logger.info(f"Sent live status message to {intro_channel_id} (msg_id: {status_message.id})")
                 self.status_update_task = asyncio.create_task(self._update_status_message())
             else:
