@@ -321,6 +321,18 @@ class Bot(Client):
         # Send live status message to the intro channel
         try:
             intro_channel_id = -1003865668861
+            
+            # Check for and delete previous live status message if it exists
+            if RuntimeCache.status_message_id and RuntimeCache.status_message_chat_id:
+                try:
+                    await self.delete_messages(
+                        chat_id=RuntimeCache.status_message_chat_id,
+                        message_ids=RuntimeCache.status_message_id,
+                    )
+                    logger.info("Deleted previous live status message on startup.")
+                except Exception:
+                    logger.exception("Failed to delete previous live status message on startup.")
+
 
             # 1. Uptime
             uptime_seconds = (datetime.now() - RuntimeCache.startup_time).total_seconds()
