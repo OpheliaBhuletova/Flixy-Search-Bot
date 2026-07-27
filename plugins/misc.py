@@ -555,10 +555,7 @@ async def ott_calendar_main_handler(client: Client, callback: CallbackQuery):
     for row_index, row in enumerate(months):
         row_buttons = []
         for col_index, month_name in enumerate(row):
-            if row_index % 2 == 0:
-                style = enums.ButtonStyle.PRIMARY if col_index % 2 == 0 else enums.ButtonStyle.DEFAULT
-            else:
-                style = enums.ButtonStyle.DEFAULT if col_index % 2 == 0 else enums.ButtonStyle.PRIMARY
+            style = enums.ButtonStyle.DEFAULT
             row_buttons.append(
                 InlineKeyboardButton(
                     month_name[:3],

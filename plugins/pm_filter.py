@@ -99,12 +99,6 @@ async def private_message_router(client: Client, message: Message):
     if message.text.startswith("/") or len(message.text) > 300:
         return
 
-    # Only sudo users and admins can trigger PM movie searches.  Normal
-    # users are directed to inline mode instead of receiving replies here.
-    uid = message.from_user.id if message.from_user else None
-    if uid and uid not in settings.SUDO_USERS and uid not in settings.ADMINS:
-        return
-
     # reuse auto_filter implementation for private chats
     await auto_filter(client, message)
 

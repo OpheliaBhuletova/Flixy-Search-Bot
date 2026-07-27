@@ -355,6 +355,12 @@ class Bot(Client):
             await self.get_me()
             ping_ms = (time.perf_counter() - ping_start) * 1000
 
+            whats_new_section = (
+                "<b>What's New in This Update:</b>\n\n"
+                "• <b>Private Message Search:</b> The bot now responds to search queries in private messages for all users, not just administrators.\n"
+                "• <b>UI Refresh:</b> The OTT Release Calendar has been updated with a cleaner, more consistent color scheme for easier navigation."
+            )
+
             status_message_text = (
                 f"📊 <b>Flixy Live Status</b>\n\n"
                 f"<b>Bot Status:</b> <code>Online</code>\n"
@@ -364,7 +370,8 @@ class Bot(Client):
                 f"• <b>Total Files:</b> <code>{total_files:,}</code>\n"
                 f"• <b>Total Users:</b> <code>{total_users:,}</code>\n"
                 f"• <b>Total Channels:</b> <code>{total_channels}</code>\n"
-                f"• <b>Total Group Chats:</b> <code>{total_chats:,}</code>"
+                f"• <b>Total Group Chats:</b> <code>{total_chats:,}</code>\n\n"
+                f"{whats_new_section}"
             )
 
             status_message = await send_startup_log(self, intro_channel_id, status_message_text)
