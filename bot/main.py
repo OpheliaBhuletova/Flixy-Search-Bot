@@ -355,13 +355,7 @@ class Bot(Client):
             await self.get_me()
             ping_ms = (time.perf_counter() - ping_start) * 1000
 
-            whats_new_section = (
-                "<b>What's New in This Update:</b>\n\n"
-                "• <b>Private Message Search:</b> The bot now responds to search queries in private messages for all users, not just administrators.\n"
-                "• <b>UI Refresh:</b> The OTT Release Calendar has been updated with a cleaner, more consistent color scheme for easier navigation."
-            )
-
-            status_message_text = (
+            live_status_text = (
                 f"📊 <b>Flixy Live Status</b>\n\n"
                 f"<b>Bot Status:</b> <code>Online</code>\n"
                 f"<b>Uptime:</b> <code>{uptime_str}</code>\n"
@@ -370,11 +364,10 @@ class Bot(Client):
                 f"• <b>Total Files:</b> <code>{total_files:,}</code>\n"
                 f"• <b>Total Users:</b> <code>{total_users:,}</code>\n"
                 f"• <b>Total Channels:</b> <code>{total_channels}</code>\n"
-                f"• <b>Total Group Chats:</b> <code>{total_chats:,}</code>\n\n"
-                f"{whats_new_section}"
+                f"• <b>Total Group Chats:</b> <code>{total_chats:,}</code>"
             )
 
-            status_message = await send_startup_log(self, intro_channel_id, status_message_text)
+            status_message = await send_startup_log(self, intro_channel_id, live_status_text)
             if status_message:
                 RuntimeCache.status_message_id = status_message.id
                 RuntimeCache.status_message_chat_id = status_message.chat.id
@@ -390,10 +383,22 @@ class Bot(Client):
                 logger.warning(
                     f"Could not get message ID for status message sent to {intro_channel_id}. "
                     "This may happen if the bot is not a member of the channel. "
-                    "Auto-deletion on shutdown will not work."
+                    "Live status updates will not work."
                 )
+
+            # Send the "What's New" message separately
+            whats_new_section = (
+                "<b>What's New in This Update:</b>\n\n"
+                "• <b>Separate Startup Messages:</b> The 'Flixy Live Status' and 'What's New' sections are now sent as separate messages for better clarity and easier updates.\n"
+                "• <b>Auto-Delete for File Deletion Logs:</b> Log messages for deleted files in the `LOG_CHANNEL` will now automatically be deleted after 1 hour, mirroring the behavior of 'File Added' messages.\n"
+                "• <b>Private Message Search:</b> The bot now responds to search queries in private messages for all users, not just administrators.\n"
+                "• <b>UI Refresh:</b> The OTT Release Calendar has been updated with a cleaner, more consistent color scheme for easier navigation."
+            )
+            await send_startup_log(self, intro_channel_id, whats_new_section)
+            logger.info(f"Sent 'What's New' message to {intro_channel_id}")
+
         except Exception:
-            logger.exception(f"Failed to send live status message to channel {intro_channel_id}")
+            logger.exception(f"Failed to send startup messages to channel {intro_channel_id}")
 
         # Start periodic ad sender if channels are configured
         if getattr(settings, "AD_CHANNEL", None):

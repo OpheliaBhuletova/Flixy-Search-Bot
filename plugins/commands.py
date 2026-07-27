@@ -226,6 +226,7 @@ async def delete_file_command(client: Client, message: Message):
                         f"<b>Deleted By:</b> {admin_link}"
                     )
                 await client.send_message(log_channel, log_msg, parse_mode=enums.ParseMode.HTML)
+                schedule_delete_message(client, sent_log.chat.id, sent_log.id, delay_seconds=3600)
             except Exception as e:
                 logger.exception(f"Failed to log file deletion to LOG_CHANNEL: {e}")
     else:
