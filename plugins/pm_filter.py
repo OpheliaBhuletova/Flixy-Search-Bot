@@ -379,18 +379,15 @@ async def auto_filter(client: Client, message, spoll=None):
             return
         search = message.text.strip()
         
-        # Show animated "🔍 Searching..." message
-        dots = ["", ".", "..", "..."]
-        for i in range(4):
-            try:
-                await client.send_message_draft(
-                    chat_id=message.chat.id,
-                    draft_id=draft_id,
-                    text=f"🔍 Searching{dots[i % 4]}"
-                )
-                await asyncio.sleep(0.4)
-            except Exception:
-                pass
+        # Show searching message
+        try:
+            await client.send_message_draft(
+                chat_id=message.chat.id,
+                draft_id=draft_id,
+                text="🔍 Searching"
+            )
+        except Exception:
+            pass
         
         files, offset, total = await get_pm_search_results_with_fallback(search.lower(), filter=True)
         if not files:

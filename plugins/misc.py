@@ -260,22 +260,7 @@ async def imdb_info_handler(client: Client, message: Message):
     await client.send_message_draft(
         chat_id=message.chat.id,
         draft_id=draft_id,
-        text="🔍 Fetching metadata..."
-    )
-
-    # Optional streaming effect
-    await asyncio.sleep(0.4)
-    await client.send_message_draft(
-        chat_id=message.chat.id,
-        draft_id=draft_id,
-        text="🔍 Fetching metadata.."
-    )
-
-    await asyncio.sleep(0.4)
-    await client.send_message_draft(
-        chat_id=message.chat.id,
-        draft_id=draft_id,
-        text="🔍 Fetching metadata..."
+        text="🔍 Fetching metadata"
     )
 
     imdb = await get_imdb_info(query)
