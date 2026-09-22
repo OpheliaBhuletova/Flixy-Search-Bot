@@ -406,8 +406,9 @@ class Bot(Client):
                 "• <b>Private Message Search:</b> The bot now responds to search queries in private messages for all users, not just administrators.\n"
                 "• <b>UI Refresh:</b> The OTT Release Calendar has been updated with a cleaner, more consistent color scheme for easier navigation."
             )
-            await send_startup_log(self, intro_channel_id, whats_new_section)
-            logger.info(f"Sent 'What's New' message to {intro_channel_id}")
+            # Startup sending is intentionally disabled; keep the message ready for later use.
+            # await send_startup_log(self, intro_channel_id, whats_new_section)
+            # logger.info(f"Sent 'What's New' message to {intro_channel_id}")
 
         except Exception:
             logger.exception(f"Failed to send startup messages to channel {intro_channel_id}")

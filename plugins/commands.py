@@ -900,6 +900,26 @@ async def subscribe_handler(client: Client, message: Message):
         await message.reply("ℹ️ You already have this movie subscription.")
 
 
+@Client.on_message(filters.command("mysubscriptions") & filters.private)
+async def my_subscriptions_handler(client: Client, message: Message):
+    """Display the current user's movie subscriptions."""
+    subscriptions = await db.get_movie_subscriptions(message.from_user.id)
+    if not subscriptions:
+        await message.reply(
+            "📭 You do not have any movie subscriptions yet.\n\n"
+            "Use /subscribe to see how to add one."
+        )
+        return
+
+    lines = ["🔔 <b>Your Movie Subscriptions</b>", ""]
+    for index, subscription in enumerate(subscriptions, start=1):
+        languages = " ".join(subscription.get("languages", []))
+        size = subscription.get("size", "?")
+        lines.append(f"{index}. <b>{languages}</b> — size <b>{size}</b>")
+
+    await message.reply("\n".join(lines), parse_mode=enums.ParseMode.HTML)
+
+
 @Client.on_callback_query(filters.regex("^watchlist_add#"))
 async def watchlist_add_callback_handler(client: Client, callback: CallbackQuery):
     """Handles callback for adding a series to watchlist from search results."""

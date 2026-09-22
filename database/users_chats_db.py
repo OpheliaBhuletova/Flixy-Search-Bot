@@ -134,6 +134,11 @@ class Database:
                 matching_users.append(user["id"])
         return matching_users
 
+    async def get_movie_subscriptions(self, user_id: int) -> List[Dict]:
+        """Return all movie subscriptions saved for a user."""
+        user = await self.col.find_one({"id": int(user_id)}, {"movie_subscriptions": 1})
+        return user.get("movie_subscriptions", []) if user else []
+
     # ─── Ban System ──────────────────────────────────────────────────────
     async def ban_user(self, user_id, ban_reason="No Reason"):
         await self.col.update_one(
