@@ -22,7 +22,7 @@ from pyrogram.errors.exceptions.bad_request_400 import (
 from bot.config import settings
 from bot.utils.cache import RuntimeCache
 from database.ia_filterdb import save_file, save_file_inline, save_file_pm, announce_title
-from bot.utils.broadcast import new_movie_broadcast
+from bot.utils.broadcast import new_movie_broadcast, notify_movie_subscribers
 
 logger = logging.getLogger(__name__)
 
@@ -336,6 +336,8 @@ async def index_files_to_db(
 
                     if saved:
                         total += 1
+                        if db_type == "inline":
+                            await notify_movie_subscribers(client, msg, media)
                         # Mark as announced regardless of DB to prevent future broadcast spam
                         await announce_title(title)
                     elif reason == 0:

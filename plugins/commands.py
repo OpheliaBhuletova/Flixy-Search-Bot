@@ -4,6 +4,7 @@ import logging
 import re
 import html
 import aiohttp
+import shlex
 
 from pyrogram import Client, filters, enums
 from pyrogram.types import CallbackQuery
@@ -865,6 +866,38 @@ async def add_watchlist_handler(client: Client, message: Message):
             f"Multiple TV series found for '{html.escape(query)}'. Please select one:",
             reply_markup=InlineKeyboardMarkup(buttons),
         )
+
+
+@Client.on_message(filters.command("subscribe") & filters.private)
+async def subscribe_handler(client: Client, message: Message):
+    """Create a movie subscription or show its usage instructions."""
+    if len(message.command) < 2:
+        await message.reply(Texts.SUBSCRIBE_TXT)
+        return
+
+    try:
+        arguments = shlex.split(message.text.partition(" ")[2])
+    except ValueError:
+        arguments = []
+
+    if len(arguments) != 2:
+        await message.reply(Texts.SUBSCRIBE_TXT)
+        return
+
+    languages = arguments[0].split()
+    size = arguments[1].upper()
+    if not languages or size not in {"A", "B", "C", "D"}:
+        await message.reply(Texts.SUBSCRIBE_TXT)
+        return
+
+    added = await db.add_movie_subscription(message.from_user.id, languages, size)
+    if added:
+        await message.reply(
+            f"✅ Subscription saved for <b>{' '.join(languages)}</b> movies in size category <b>{size}</b>.",
+            parse_mode=enums.ParseMode.HTML,
+        )
+    else:
+        await message.reply("ℹ️ You already have this movie subscription.")
 
 
 @Client.on_callback_query(filters.regex("^watchlist_add#"))

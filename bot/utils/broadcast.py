@@ -16,6 +16,49 @@ from database.users_chats_db import db
 
 logger = logging.getLogger(__name__)
 
+MOVIE_SIZE_RANGES = {
+    "A": (400 * 1024 * 1024, 500 * 1024 * 1024),
+    "B": (700 * 1024 * 1024, 800 * 1024 * 1024),
+    "C": (1.2 * 1024**3, 1.7 * 1024**3),
+    "D": (2.7 * 1024**3, 3.8 * 1024**3),
+}
+
+
+def get_movie_size_category(file_size: int) -> str | None:
+    """Return the subscription category for a file size, if it matches."""
+    for category, (minimum, maximum) in MOVIE_SIZE_RANGES.items():
+        if minimum <= file_size <= maximum:
+            return category
+    return None
+
+
+async def notify_movie_subscribers(client: Client, message: Message, media) -> None:
+    """Send a newly added movie to users with a matching subscription."""
+    size_category = get_movie_size_category(int(getattr(media, "file_size", 0) or 0))
+    if not size_category:
+        return
+
+    movie_text = f"{getattr(media, 'file_name', '')} "
+    movie_text += message.caption.html if message.caption else ""
+    user_ids = await db.get_movie_subscription_users(movie_text, size_category)
+    for user_id in user_ids:
+        try:
+            await client.send_message(
+                user_id,
+                "🔔 <b>New subscribed movie available</b>\n\n"
+                f"Size category: <b>{size_category}</b>",
+                parse_mode=enums.ParseMode.HTML,
+            )
+            await message.copy(chat_id=user_id)
+        except InputUserDeactivated:
+            await db.delete_user(user_id)
+        except UserIsBlocked:
+            logger.info("User %s blocked subscription notifications", user_id)
+        except PeerIdInvalid:
+            await db.delete_user(user_id)
+        except Exception:
+            logger.exception("Failed to notify movie subscriber %s", user_id)
+
 def _split_title_year(title: str) -> tuple[str, str | None]:
     if not title:
         return "", None

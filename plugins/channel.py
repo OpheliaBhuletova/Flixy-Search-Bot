@@ -8,7 +8,7 @@ from database.ia_filterdb import save_file, save_file_inline, save_file_pm, anno
 from database.users_chats_db import db
 from bot.services.metadata_service import search_tmdb_titles
 from bot.utils.helpers import extract_series_name_from_file, schedule_delete_message
-from bot.utils.broadcast import new_movie_broadcast
+from bot.utils.broadcast import new_movie_broadcast, notify_movie_subscribers
 
 logger = logging.getLogger(__name__)
 
@@ -71,6 +71,9 @@ async def channel_media_handler(client: Client, message: Message):
     
     if saved:
         logger.info(f"✅ File saved successfully: {title}")
+
+        if message.chat.id in settings.MOVIES_CHANNELS:
+            await notify_movie_subscribers(client, message, media)
         
         # Log to Telegram LOG_CHANNEL for tracking
         if settings.LOG_CHANNEL and message.chat.id != WATCHLIST_NOTIFICATION_CHANNEL:

@@ -1,4 +1,5 @@
 import logging
+import re
 import motor.motor_asyncio
 from typing import List, Dict, Optional
 
@@ -89,6 +90,49 @@ class Database:
             {"$pull": {"watchlist": {"tmdb_id": tmdb_id, "media_type": media_type}}}
         )
         return result.modified_count > 0
+
+    # ─── Movie Subscriptions ──────────────────────────────────────────
+    async def add_movie_subscription(self, user_id: int, languages: List[str], size: str) -> bool:
+        """Save a movie subscription, returning False when it already exists."""
+        subscription = {
+            "languages": sorted({language.casefold() for language in languages}),
+            "size": size.upper(),
+        }
+        user = await self.col.find_one(
+            {"id": int(user_id), "movie_subscriptions": subscription},
+            {"_id": 1},
+        )
+        if user:
+            return False
+
+        await self.col.update_one(
+            {"id": int(user_id)},
+            {"$addToSet": {"movie_subscriptions": subscription}},
+            upsert=True,
+        )
+        return True
+
+    async def get_movie_subscription_users(self, movie_text: str, size: str) -> List[int]:
+        """Return users whose size and language preferences match movie text."""
+        users = self.col.find(
+            {
+                "movie_subscriptions.size": size.upper(),
+            },
+        )
+        matching_users = []
+        searchable_text = movie_text.casefold()
+        for user in [user async for user in users]:
+            subscriptions = user.get("movie_subscriptions", [])
+            if any(
+                subscription.get("size") == size.upper()
+                and any(
+                    re.search(rf"\b{re.escape(language)}\b", searchable_text)
+                    for language in subscription.get("languages", [])
+                )
+                for subscription in subscriptions
+            ):
+                matching_users.append(user["id"])
+        return matching_users
 
     # ─── Ban System ──────────────────────────────────────────────────────
     async def ban_user(self, user_id, ban_reason="No Reason"):

@@ -178,6 +178,27 @@ Helpful commands for information and utilities.
 • `/mywatchlist` — view your watchlist
 """
 
+    SUBSCRIBE_TXT = """
+🔔 **Subscribe to Movies**
+
+Get notified when a movie matching your preferred **language** and **file size** is available.
+
+**Format:**
+`/subscribe "Language(s)" Size`
+
+**File Sizes:**
+A — 400–500 MB
+B — 700–800 MB
+C — 1.2–1.7 GB
+D — 2.7–3.8 GB
+
+**Examples:**
+`/subscribe "Malayalam" C`
+`/subscribe "Malayalam Hindi" B`
+
+💡 You can add multiple languages inside the quotes.
+"""
+
     # ───────────────────────────────────
     # ADMIN MODULES
     # ───────────────────────────────────
