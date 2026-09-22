@@ -17,19 +17,24 @@ from database.users_chats_db import db
 logger = logging.getLogger(__name__)
 
 MOVIE_SIZE_RANGES = {
-    "A": (400 * 1024 * 1024, 500 * 1024 * 1024),
-    "B": (700 * 1024 * 1024, 800 * 1024 * 1024),
-    "C": (1.2 * 1024**3, 1.7 * 1024**3),
-    "D": (2.7 * 1024**3, 3.8 * 1024**3),
+    "A": (400 * 1024 * 1024, 500 * 1024 * 1024, "400–500 MB"),
+    "B": (700 * 1024 * 1024, 800 * 1024 * 1024, "700–800 MB"),
+    "C": (1.2 * 1024**3, 1.7 * 1024**3, "1.2–1.7 GB"),
+    "D": (2.7 * 1024**3, 3.8 * 1024**3, "2.7–3.8 GB"),
 }
 
 
 def get_movie_size_category(file_size: int) -> str | None:
     """Return the subscription category for a file size, if it matches."""
-    for category, (minimum, maximum) in MOVIE_SIZE_RANGES.items():
+    for category, (minimum, maximum, _) in MOVIE_SIZE_RANGES.items():
         if minimum <= file_size <= maximum:
             return category
     return None
+
+
+def get_movie_size_label(category: str) -> str:
+    """Return the human-readable size range for a subscription category."""
+    return MOVIE_SIZE_RANGES[category][2]
 
 
 async def notify_movie_subscribers(client: Client, message: Message, media) -> None:
@@ -40,13 +45,16 @@ async def notify_movie_subscribers(client: Client, message: Message, media) -> N
 
     movie_text = f"{getattr(media, 'file_name', '')} "
     movie_text += message.caption.html if message.caption else ""
-    user_ids = await db.get_movie_subscription_users(movie_text, size_category)
-    for user_id in user_ids:
+    subscribers = await db.get_movie_subscription_users(movie_text, size_category)
+    for subscriber in subscribers:
+        user_id = subscriber["id"]
+        matched_language = subscriber["language"]
         try:
             await client.send_message(
                 user_id,
-                "🔔 <b>New subscribed movie available</b>\n\n"
-                f"Size category: <b>{size_category}</b>",
+                "🔔 <b>New subscription match!</b>\n"
+                f"🎬 <b>{matched_language.title()}</b>\n"
+                f"💾 <b>{get_movie_size_label(size_category)}</b>",
                 parse_mode=enums.ParseMode.HTML,
             )
             await message.copy(chat_id=user_id)

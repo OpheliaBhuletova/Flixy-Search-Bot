@@ -287,37 +287,6 @@ class Bot(Client):
         logger.info("%s started with Pyrogram v%s as %s", me.first_name, __version__, self.username)
         logger.info(LOG_STR)
 
-        # Startup log
-        log_channel = getattr(settings, "LOG_CHANNEL", 0)
-        if log_channel:
-            try:
-                boot_duration = (datetime.now() - RuntimeCache.startup_time).total_seconds()
-                ping_start = time.perf_counter()
-                await self.get_me()
-                ping_ms = (time.perf_counter() - ping_start) * 1000
-                
-                startup_msg = (
-                    f"<b>🚀 Flixy Search Bot Online</b>\n\n"
-                    f"<blockquote>\n"
-                    f"Metadata: {('TMDb ✓' if settings.METADATA_ENABLED else 'Disabled ✗')}\n"
-                    f"SpellCheck:  <b>{('Enabled ✓' if settings.SPELL_CHECK_REPLY else 'Disabled ✗')}</b>\n"
-                    f"Max Results: <b>{(settings.MAX_LIST_ELM if settings.MAX_LIST_ELM else 'Default')}</b>\n"
-                    f"</blockquote>\n\n"
-                    f"⚡ Ping: <b>{ping_ms:.0f}</b> ms\n"
-                    f"⏱ Boot: <b>{boot_duration:.2f}s</b>\n\n"
-                    f"Ready."
-                )
-                msg = await send_startup_log(
-                    self,
-                    int(log_channel),
-                    startup_msg,
-                )
-                # Auto-delete startup log after 60 seconds
-                if msg:
-                    schedule_delete_message(self, msg.chat.id, msg.id, delay_seconds=60)
-            except Exception:
-                logger.exception("Failed to send startup log to LOG_CHANNEL")
-
         # Send live status message to the intro channel
         try:
             intro_channel_id = -1003865668861
@@ -401,14 +370,17 @@ class Bot(Client):
             # Send the "What's New" message separately
             whats_new_section = (
                 "<b>What's New in This Update:</b>\n\n"
-                "• <b>Separate Startup Messages:</b> The 'Flixy Live Status' and 'What's New' sections are now sent as separate messages for better clarity and easier updates.\n"
-                "• <b>Auto-Delete for File Deletion Logs:</b> Log messages for deleted files in the `LOG_CHANNEL` will now automatically be deleted after 1 hour, mirroring the behavior of 'File Added' messages.\n"
-                "• <b>Private Message Search:</b> The bot now responds to search queries in private messages for all users, not just administrators.\n"
-                "• <b>UI Refresh:</b> The OTT Release Calendar has been updated with a cleaner, more consistent color scheme for easier navigation."
+                "🔔 <b>Movie Subscriptions</b>\n"
+                "Get notified in PM when a matching movie is added.\n\n"
+                "<b>Subscribe:</b> /subscribe &quot;Language(s)&quot; Size\n"
+                "<b>Sizes:</b> A (400–500 MB), B (700–800 MB), C (1.2–1.7 GB), D (2.7–3.8 GB)\n\n"
+                "<b>Examples:</b>\n"
+                "/subscribe &quot;Malayalam&quot; C\n"
+                "/subscribe &quot;Malayalam Hindi&quot; B\n\n"
+                "Use <b>/mysubscriptions</b> to view your saved subscriptions."
             )
-            # Startup sending is intentionally disabled; keep the message ready for later use.
-            # await send_startup_log(self, intro_channel_id, whats_new_section)
-            # logger.info(f"Sent 'What's New' message to {intro_channel_id}")
+            await send_startup_log(self, intro_channel_id, whats_new_section)
+            logger.info(f"Sent 'What's New' message to {intro_channel_id}")
 
         except Exception:
             logger.exception(f"Failed to send startup messages to channel {intro_channel_id}")

@@ -112,8 +112,8 @@ class Database:
         )
         return True
 
-    async def get_movie_subscription_users(self, movie_text: str, size: str) -> List[int]:
-        """Return users whose size and language preferences match movie text."""
+    async def get_movie_subscription_users(self, movie_text: str, size: str) -> List[Dict]:
+        """Return matching users and the language that matched their subscription."""
         users = self.col.find(
             {
                 "movie_subscriptions.size": size.upper(),
@@ -123,15 +123,20 @@ class Database:
         searchable_text = movie_text.casefold()
         for user in [user async for user in users]:
             subscriptions = user.get("movie_subscriptions", [])
-            if any(
-                subscription.get("size") == size.upper()
-                and any(
-                    re.search(rf"\b{re.escape(language)}\b", searchable_text)
-                    for language in subscription.get("languages", [])
+            for subscription in subscriptions:
+                if subscription.get("size") != size.upper():
+                    continue
+                matched_language = next(
+                    (
+                        language
+                        for language in subscription.get("languages", [])
+                        if re.search(rf"\b{re.escape(language)}\b", searchable_text)
+                    ),
+                    None,
                 )
-                for subscription in subscriptions
-            ):
-                matching_users.append(user["id"])
+                if matched_language:
+                    matching_users.append({"id": user["id"], "language": matched_language})
+                    break
         return matching_users
 
     async def get_movie_subscriptions(self, user_id: int) -> List[Dict]:

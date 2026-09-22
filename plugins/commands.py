@@ -911,11 +911,22 @@ async def my_subscriptions_handler(client: Client, message: Message):
         )
         return
 
+    size_labels = {
+        "A": "400–500 MB",
+        "B": "700–800 MB",
+        "C": "1.2–1.7 GB",
+        "D": "2.7–3.8 GB",
+    }
     lines = ["🔔 <b>Your Movie Subscriptions</b>", ""]
     for index, subscription in enumerate(subscriptions, start=1):
-        languages = " ".join(subscription.get("languages", []))
+        languages = " · ".join(
+            language.title() for language in subscription.get("languages", [])
+        )
         size = subscription.get("size", "?")
-        lines.append(f"{index}. <b>{languages}</b> — size <b>{size}</b>")
+        size_label = size_labels.get(size, size)
+        lines.append(f"<b>{index}.</b> 🎬 {languages}")
+        lines.append(f"  💾 <b>{size_label}</b>")
+        lines.append("")
 
     await message.reply("\n".join(lines), parse_mode=enums.ParseMode.HTML)
 
