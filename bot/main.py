@@ -370,14 +370,20 @@ class Bot(Client):
             # Send the "What's New" message separately
             whats_new_section = (
                 "<b>What's New in This Update:</b>\n\n"
-                "🔔 <b>Movie Subscriptions</b>\n"
-                "Get notified in PM when a matching movie is added.\n\n"
-                "<b>Subscribe:</b> /subscribe &quot;Language(s)&quot; Size\n"
-                "<b>Sizes:</b> A (400–500 MB), B (700–800 MB), C (1.2–1.7 GB), D (2.7–3.8 GB)\n\n"
-                "<b>Examples:</b>\n"
-                "/subscribe &quot;Malayalam&quot; C\n"
-                "/subscribe &quot;Malayalam Hindi&quot; B\n\n"
-                "Use <b>/mysubscriptions</b> to view your saved subscriptions."
+                "🎬 <b>Movie &amp; Series Requests</b>\n"
+                "Request a missing title directly in PM:\n"
+                "<code>/request \"Movie Name\" Language</code>\n\n"
+                "<b>Example:</b> <code>/request \"Interstellar\" English</code>\n\n"
+                "<b>Need to Know:</b>\n"
+                "• Put the title in quotes and include the language.\n"
+                "• Only one pending request is allowed at a time.\n"
+                "• Once the file is available, the team will confirm it and send it directly.\n"
+                "• For additional files, use the <b>Search</b> button in the start message.\n\n"
+                "🔕 <b>Manage Subscriptions</b>\n"
+                "Remove an active subscription with:\n"
+                "<code>/unsubscribe \"Language(s)\" Size</code>\n\n"
+                "<b>Example:</b> <code>/unsubscribe \"Malayalam Hindi\" B</code>\n"
+                "Use <b>/mysubscriptions</b> to view all active subscriptions."
             )
             await send_startup_log(self, intro_channel_id, whats_new_section)
             logger.info(f"Sent 'What's New' message to {intro_channel_id}")

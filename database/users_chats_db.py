@@ -13,6 +13,7 @@ class Database:
         self.db = self._client[database_name]
         self.col = self.db.users
         self.grp = self.db.groups
+        self.requests = self.db.requests
 
     async def ensure_indexes(self):
         """Asynchronously create necessary indexes for users and groups collections."""
@@ -22,6 +23,7 @@ class Database:
 
             await self.grp.create_index("id", unique=True)
             await self.grp.create_index("chat_status.is_disabled")
+            await self.requests.create_index([("status", 1), ("created_at", -1)])
         except Exception:
             logger.exception("Failed creating MongoDB indexes (async)")
 
@@ -49,6 +51,104 @@ class Database:
 
     async def get_all_users(self):
         return self.col.find({})
+
+    async def add_request(self, user_id: int, title: str, language: str) -> Optional[str]:
+        from datetime import datetime, timezone
+
+        active_request = await self.requests.find_one({
+            "user_id": int(user_id),
+            "status": {"$in": ["pending", "processing"]},
+        }, {"_id": 1})
+        if active_request:
+            return None
+
+        result = await self.requests.insert_one({
+            "user_id": int(user_id),
+            "title": title,
+            "language": language,
+            "status": "pending",
+            "created_at": datetime.now(timezone.utc),
+        })
+        return str(result.inserted_id)
+
+    async def get_request(self, request_id: str) -> Optional[Dict]:
+        from bson import ObjectId
+
+        try:
+            return await self.requests.find_one({"_id": ObjectId(request_id)})
+        except (TypeError, ValueError):
+            return None
+
+    async def set_request_messages(
+        self,
+        request_id: str,
+        log_message_id: int,
+        acknowledgment_message_id: int,
+    ) -> bool:
+        from bson import ObjectId
+
+        try:
+            result = await self.requests.update_one(
+                {"_id": ObjectId(request_id), "status": "pending"},
+                {"$set": {
+                    "log_message_id": int(log_message_id),
+                    "acknowledgment_message_id": int(acknowledgment_message_id),
+                }},
+            )
+            return result.modified_count == 1
+        except (TypeError, ValueError):
+            return False
+
+    async def get_request_by_log_message(self, log_message_id: int) -> Optional[Dict]:
+        return await self.requests.find_one({
+            "log_message_id": int(log_message_id),
+            "status": "awaiting_file",
+        })
+
+    async def start_request_processing(self, request_id: str) -> bool:
+        from bson import ObjectId
+
+        try:
+            result = await self.requests.update_one(
+                {"_id": ObjectId(request_id), "status": "pending"},
+                {"$set": {"status": "processing"}},
+            )
+            return result.modified_count == 1
+        except (TypeError, ValueError):
+            return False
+
+    async def reset_request_pending(self, request_id: str) -> bool:
+        from bson import ObjectId
+
+        try:
+            result = await self.requests.update_one(
+                {"_id": ObjectId(request_id), "status": "processing"},
+                {"$set": {"status": "pending"}},
+            )
+            return result.modified_count == 1
+        except (TypeError, ValueError):
+            return False
+
+    async def fulfill_request(self, request_id: str, file_id: str) -> bool:
+        from datetime import datetime, timezone
+        from bson import ObjectId
+
+        try:
+            result = await self.requests.update_one(
+                {"_id": ObjectId(request_id), "status": "processing"},
+                {"$set": {
+                    "status": "fulfilled",
+                    "file_id": file_id,
+                    "fulfilled_at": datetime.now(timezone.utc),
+                }},
+            )
+            return result.modified_count == 1
+        except (TypeError, ValueError):
+            return False
+
+    async def clear_pending_requests(self) -> int:
+        result = await self.requests.delete_many({"status": "pending"})
+        return result.deleted_count
 
     async def delete_user(self, user_id):
         await self.col.delete_many({"id": int(user_id)})
@@ -111,6 +211,18 @@ class Database:
             upsert=True,
         )
         return True
+
+    async def remove_movie_subscription(self, user_id: int, languages: List[str], size: str) -> bool:
+        """Remove the exact movie subscription matching languages and size."""
+        subscription = {
+            "languages": sorted({language.casefold() for language in languages}),
+            "size": size.upper(),
+        }
+        result = await self.col.update_one(
+            {"id": int(user_id)},
+            {"$pull": {"movie_subscriptions": subscription}},
+        )
+        return result.modified_count == 1
 
     async def get_movie_subscription_users(self, movie_text: str, size: str) -> List[Dict]:
         """Return matching users and the language that matched their subscription."""

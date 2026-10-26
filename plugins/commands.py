@@ -19,7 +19,9 @@ from bot.services.metadata_service import get_imdb_info, search_tmdb_titles
 from database.ia_filterdb import (
     delete_file_by_id,
     get_inline_collection,
+    get_inline_search_results,
     get_pm_collection,
+    get_pm_search_results,
     unpack_new_file_id,
 )
 from database.users_chats_db import db
@@ -311,6 +313,42 @@ async def set_startup_image(client: Client, message: Message):
     except Exception as e:
         logger.exception("Error setting startup image")
         await message.reply(f"❌ Error: {str(e)}")
+
+
+@Client.on_message(filters.command("clearall") & filters.private & filters.user(settings.ADMINS))
+async def clear_pending_requests_command(client: Client, message: Message):
+    """Delete all pending media requests."""
+    try:
+        deleted_count = await db.clear_pending_requests()
+        logger.info(
+            "Admin %s cleared %s pending requests",
+            message.from_user.id,
+            deleted_count,
+        )
+        await message.reply(
+            f"✅ <b>Cleared {deleted_count} pending request"
+            f"{'s' if deleted_count != 1 else ''}.</b>",
+            parse_mode=enums.ParseMode.HTML,
+        )
+
+        log_channel = getattr(settings, "LOG_CHANNEL", 0)
+        if log_channel:
+            try:
+                await client.send_message(
+                    chat_id=log_channel,
+                    text=(
+                        "<b>🧹 Pending Requests Cleared</b>\n\n"
+                        f"<b>Cleared by:</b> {message.from_user.mention}\n"
+                        f"<b>Admin ID:</b> <code>{message.from_user.id}</code>\n"
+                        f"<b>Pending requests deleted:</b> <code>{deleted_count}</code>"
+                    ),
+                    parse_mode=enums.ParseMode.HTML,
+                )
+            except Exception:
+                logger.exception("Failed to log /clearall to LOG_CHANNEL")
+    except Exception:
+        logger.exception("Failed to clear pending requests")
+        await message.reply("❌ Could not clear pending requests. Please try again.")
 
 
 @Client.on_message(filters.command("deleteallimages") & filters.private)
@@ -898,6 +936,263 @@ async def subscribe_handler(client: Client, message: Message):
         )
     else:
         await message.reply("ℹ️ You already have this movie subscription.")
+
+
+@Client.on_message(filters.command("unsubscribe") & filters.private)
+async def unsubscribe_handler(client: Client, message: Message):
+    """Delete an exact movie subscription."""
+    try:
+        arguments = shlex.split(message.text.partition(" ")[2])
+    except ValueError:
+        arguments = []
+
+    if len(arguments) != 2:
+        await message.reply(
+            "<b>Usage:</b> <code>/unsubscribe \"Language(s)\" Size</code>\n"
+            "<b>Example:</b> <code>/unsubscribe \"Malayalam Hindi\" B</code>",
+            parse_mode=enums.ParseMode.HTML,
+        )
+        return
+
+    languages = arguments[0].split()
+    size = arguments[1].upper()
+    if not languages or size not in {"A", "B", "C", "D"}:
+        await message.reply(
+            "❌ Use languages followed by size A, B, C, or D.\n"
+            "Example: <code>/unsubscribe \"Malayalam Hindi\" B</code>",
+            parse_mode=enums.ParseMode.HTML,
+        )
+        return
+
+    removed = await db.remove_movie_subscription(message.from_user.id, languages, size)
+    if removed:
+        await message.reply(
+            f"✅ Subscription for <b>{html.escape(' '.join(languages))}</b> "
+            f"in size <b>{size}</b> was deleted.",
+            parse_mode=enums.ParseMode.HTML,
+        )
+    else:
+        await message.reply(
+            "ℹ️ No matching subscription was found. "
+            "Use <code>/mysubscriptions</code> to see your active subscriptions.",
+            parse_mode=enums.ParseMode.HTML,
+        )
+
+
+@Client.on_message(filters.command("request") & filters.private)
+async def request_handler(client: Client, message: Message):
+    """Submit a media request in the format /request "Title" Language."""
+    usage = (
+        "<b>Usage:</b> <code>/request \"Movie Name\" Language</code>\n"
+        "<b>Example:</b> <code>/request \"Interstellar\" English</code>\n\n"
+        "Both the movie title and language are required."
+    )
+    arguments = message.text.partition(" ")[2].strip()
+    match = re.fullmatch(r'"([^"]{1,300})"\s+(.{1,50})', arguments)
+
+    if not match:
+        logger.info("User %s invoked /request with invalid usage", message.from_user.id)
+        await message.reply(
+            "❌ Incorrect request format.\n"
+            "Please send the movie title in quotes and include the language.\n\n"
+            + usage,
+            parse_mode=enums.ParseMode.HTML,
+        )
+        return
+
+    title, language = (value.strip() for value in match.groups())
+    user = message.from_user
+    username = f" (@{html.escape(user.username)})" if user.username else ""
+    user_link = f'<a href="tg://user?id={user.id}">{html.escape(user.first_name)}</a>'
+
+    log_channel = getattr(settings, "LOG_CHANNEL", 0)
+    if not log_channel:
+        logger.warning("Could not record /request for user %s: LOG_CHANNEL is not configured", user.id)
+        await message.reply("The request service is unavailable right now. Please try again later.")
+        return
+
+    try:
+        request_id = await db.add_request(user.id, title, language)
+        if not request_id:
+            await message.reply(
+                "Your pending or processing request must be fulfilled before you can submit another one.",
+                parse_mode=enums.ParseMode.HTML,
+            )
+            return
+        sent_request = await client.send_message(
+            chat_id=log_channel,
+            text=(
+                "<b>🎬 New Movie/Series Request</b>\n\n"
+                f"<b>Requested title:</b> <code>{html.escape(title)}</code>\n"
+                f"<b>Requested language:</b> <code>{html.escape(language)}</code>\n"
+                f"<b>Request status:</b> pending\n"
+                f"<b>Requested by:</b> {user_link}{username}\n"
+                f"<b>User ID:</b> <code>{user.id}</code>"
+            ),
+            parse_mode=enums.ParseMode.HTML,
+            reply_markup=InlineKeyboardMarkup([
+                [InlineKeyboardButton(
+                    "Confirm & send file",
+                    callback_data=f"request_send#{request_id}",
+                    style=enums.ButtonStyle.SUCCESS,
+                )]
+            ]),
+        )
+        acknowledgment = await message.reply(
+            f"✅ Request submitted for <b>{html.escape(title)}</b> "
+            f"(<b>{html.escape(language)}</b>).\nThe team will review it.",
+            parse_mode=enums.ParseMode.HTML,
+        )
+        await db.set_request_messages(request_id, sent_request.id, acknowledgment.id)
+    except Exception:
+        logger.exception("Failed to submit /request for user %s", user.id)
+        await message.reply("I could not submit your request right now. Please try again later.")
+        return
+
+    logger.info("Request '%s' in %s submitted by user %s", title, language, user.id)
+
+
+@Client.on_callback_query(filters.regex(r"^request_send#") & filters.user(settings.ADMINS))
+async def request_send_callback(client: Client, callback: CallbackQuery):
+    await callback.answer("Searching database...", show_alert=False)
+    request_id = callback.data.partition("#")[2]
+    request = await db.get_request(request_id)
+    if not request or request.get("status") != "pending":
+        await callback.answer("This request is no longer pending.", show_alert=True)
+        return
+
+    if not await db.start_request_processing(request_id):
+        await callback.answer("Could not start processing this request.", show_alert=True)
+        return
+
+    title = request["title"]
+    language = request["language"]
+    try:
+        logger.info(
+            "Request %s search started: title=%r language=%r",
+            request_id,
+            title,
+            language,
+        )
+        inline_files, _, inline_total = await get_inline_search_results(title, max_results=100)
+        pm_files, _, pm_total = await get_pm_search_results(title, max_results=100)
+        logger.info(
+            "Request %s title search: inline=%s candidates (total=%s), pm=%s candidates (total=%s)",
+            request_id,
+            len(inline_files),
+            inline_total,
+            len(pm_files),
+            pm_total,
+        )
+
+        files = []
+        seen_file_ids = set()
+        for source, source_files in (("inline", inline_files), ("pm", pm_files)):
+            for file in source_files:
+                file_id = file.get("_id") if isinstance(file, dict) else file.file_id
+                if file_id in seen_file_ids:
+                    continue
+                seen_file_ids.add(file_id)
+                files.append((source, file))
+
+        language_pattern = re.compile(re.escape(language), re.IGNORECASE)
+        match = None
+        for index, (source, file) in enumerate(files, start=1):
+            file_name = str(file.get("file_name", "") if isinstance(file, dict) else file.file_name)
+            caption = str(file.get("caption", "") if isinstance(file, dict) else (file.caption or ""))
+            searchable_text = f"{file_name}\n{caption}"
+            logger.info(
+                "Request %s candidate %s/%s (%s): file_name=%r language_match=%s caption_preview=%r",
+                request_id,
+                index,
+                len(files),
+                source,
+                file_name,
+                bool(language_pattern.search(searchable_text)),
+                caption[:120],
+            )
+            if language_pattern.search(searchable_text):
+                match = file
+                break
+
+        logger.info(
+            "Request %s search result: match=%s",
+            request_id,
+            f"found in {next((source for source, file in files if file is match), 'unknown')} database"
+            if match else "not found",
+        )
+    except Exception:
+        logger.exception("Request database search failed for %s", request_id)
+        match = None
+        total = 0
+
+    if not match:
+        await db.reset_request_pending(request_id)
+        await callback.message.edit_text(
+            f"<b>🎬 Request processing</b>\n\n"
+            f"<b>Title:</b> <code>{html.escape(title)}</code>\n"
+            f"<b>Language:</b> <code>{html.escape(language)}</code>\n"
+            f"<b>Request status:</b> processing\n\n"
+            "No matching database file was found.",
+            parse_mode=enums.ParseMode.HTML,
+            reply_markup=InlineKeyboardMarkup([
+                [InlineKeyboardButton("Retry", callback_data=f"request_send#{request_id}", style=enums.ButtonStyle.PRIMARY)]
+            ]),
+        )
+        return
+
+    file_id = match.get("_id") if isinstance(match, dict) else match.file_id
+    original_caption = match.get("caption") if isinstance(match, dict) else match.caption
+    try:
+        sent = await client.send_cached_media(
+            chat_id=request["user_id"],
+            file_id=file_id,
+            caption=original_caption,
+            parse_mode=enums.ParseMode.HTML,
+        )
+        acknowledgment_id = request.get("acknowledgment_message_id")
+        if acknowledgment_id:
+            try:
+                await client.delete_messages(request["user_id"], acknowledgment_id)
+            except Exception:
+                logger.warning("Could not delete request acknowledgment %s", acknowledgment_id)
+
+        await client.send_message(
+            chat_id=request["user_id"],
+            text=(
+                "<b>🎬 Your requested file is ready</b>\n\n"
+                f"<b>Title:</b> <code>{html.escape(title)}</code>\n"
+                f"<b>Language:</b> <code>{html.escape(language)}</code>\n\n"
+                "For more files, use the <b>Search</b> button in the start message."
+            ),
+            parse_mode=enums.ParseMode.HTML,
+        )
+    except Exception:
+        logger.exception("Failed to deliver request %s", request_id)
+        await db.reset_request_pending(request_id)
+        await callback.message.edit_text(
+            callback.message.text
+            + "\n\n<b>Delivery failed:</b> user may have blocked the bot.",
+            parse_mode=enums.ParseMode.HTML,
+            reply_markup=InlineKeyboardMarkup([
+                [InlineKeyboardButton("Retry", callback_data=f"request_send#{request_id}", style=enums.ButtonStyle.PRIMARY)]
+            ]),
+        )
+        return
+
+    if not await db.fulfill_request(request_id, file_id):
+        await sent.delete()
+        await callback.answer("This request was already fulfilled.", show_alert=True)
+        return
+
+    await callback.message.edit_text(
+        f"<b>🎬 Request fulfilled</b>\n\n"
+        f"<b>Title:</b> <code>{html.escape(title)}</code>\n"
+        f"<b>Language:</b> <code>{html.escape(language)}</code>\n"
+        "<b>Request status:</b> fulfilled",
+        parse_mode=enums.ParseMode.HTML,
+    )
+    await callback.answer("File sent to requester.", show_alert=True)
 
 
 @Client.on_message(filters.command("mysubscriptions") & filters.private)
